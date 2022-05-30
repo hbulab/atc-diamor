@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # heavy datafiles
-data/raw
+data
 
 .DS_Store
