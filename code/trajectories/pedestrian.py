@@ -1,4 +1,5 @@
-from .utils import *
+from trajectories.utils import *
+from trajectories.plot_utils import *
 
 
 class Pedestrian:
@@ -11,6 +12,12 @@ class Pedestrian:
         self.groups = groups
         self.env = env
         self.day = day
+
+    def __str__(self):
+        return f"Pedestrian({self.ped_id})"
+
+    def __repr__(self):
+        return f"Pedestrian({self.ped_id})"
 
     def plot_2D_trajectory(
         self,

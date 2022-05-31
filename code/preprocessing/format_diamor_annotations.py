@@ -19,12 +19,13 @@ if __name__ == "__main__":
 
         for groups in group_data:
             for group in groups:
-                group_members = sorted(group)
+                group_members = sorted(list(map(int, group)))
                 group_id = int("".join([str(int(pid)) for pid in group_members]))
 
                 if group_id not in groups_data:
                     groups_data[group_id] = {
                         "size": len(group),
+                        "members": group_members,
                     }
 
                 for ped_id in group_members:
@@ -38,10 +39,14 @@ if __name__ == "__main__":
         interaction_data = pickle_load(interaction_annotations)
 
         for row in interaction_data:
-            group_members = sorted([row[0], row[1]])
+            group_members = sorted([int(row[0]), int(row[1])])
             group_id = int("".join([str(int(pid)) for pid in group_members]))
             if group_id not in groups_data:
-                groups_data[group_id] = {"size": 2, "interaction": row[4]}
+                groups_data[group_id] = {
+                    "size": 2,
+                    "members": group_members,
+                    "interaction": row[4],
+                }
             else:
                 groups_data[group_id]["interaction"] = row[4]
 
