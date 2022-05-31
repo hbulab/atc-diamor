@@ -3,6 +3,18 @@ import numpy as np
 
 
 def compute_simultaneous_observations(trajectories):
+    """Find the section of the trajectories that correspond to simultaneous observations
+
+    Parameters
+    ----------
+    trajectories : list
+        List of trajectories
+
+    Returns
+    -------
+    list
+        The list of trajectories with simultaneous observations (i.e. same time stamps)
+    """
 
     simult_time = trajectories[0][:, 0]
 
@@ -19,6 +31,20 @@ def compute_simultaneous_observations(trajectories):
 
 
 def compute_interpersonal_distance(trajectory_A, trajectory_B):
+    """Compute the pair-wise distances between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : ndarray
+        A trajectory
+    trajectory_B : ndarray
+        A trajectory
+
+    Returns
+    -------
+    ndarray
+        1D array containing the pair-wise distances
+    """
 
     sim_traj_A, sim_traj_B = compute_simultaneous_observations(
         [trajectory_A, trajectory_B]

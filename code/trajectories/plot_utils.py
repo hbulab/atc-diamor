@@ -6,6 +6,19 @@ from trajectories.constants import *
 
 
 def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=None):
+    """Plot the trajectory of a pedestrian, as an image
+
+    Parameters
+    ----------
+    pedestrian : obj
+        A pedestrian
+    boundaries : obj, optional
+        The boundaries of the environment to be use as axis limits, by default None
+    show : bool, optional
+        Wheter or not the image should be displayed, by default True
+    save_path : str, optional
+        The path to the file where the image will be saved, by default None
+    """
     x, y = pedestrian.get_trajectory()[:, 1], pedestrian.get_trajectory()[:, 2]
     plt.scatter(x / 1000, y / 1000, c="cornflowerblue", s=10)
     plt.xlabel("x (m)")
@@ -24,6 +37,21 @@ def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=
 def plot_animated_2D_trajectory(
     pedestrian, boundaries=None, show=True, save_path=None, loop=False
 ):
+    """Plot the trajectory of a pedestrian, as an animation
+
+    Parameters
+    ----------
+    pedestrian : obj
+        A pedestrian
+    boundaries : obj, optional
+        The boundaries of the environment to be use as axis limits, by default None
+    show : bool, optional
+        Wheter or not the animation should be displayed, by default True
+    save_path : str, optional
+        The path to the file where the animation will be saved, by default None
+    loop: bool, optional
+        Wheter or not the animation should loop, by default False
+    """
     x, y = pedestrian.get_trajectory()[:, 1], pedestrian.get_trajectory()[:, 2]
 
     colors = ["cornflowerblue"] * len(x)
@@ -79,6 +107,25 @@ def plot_static_2D_trajectories(
     show=True,
     save_path=None,
 ):
+    """Plot the trajectories of a set of pedestrians
+
+    Parameters
+    ----------
+    pedestrians : list
+        A set of pedestrians
+    simultaneous : bool, optional
+        Wheter or not the trajectories should be cropped to the simultaneous observations, by default False
+    boundaries : obj, optional
+        The boundaries of the environment to be used as axis limits, by default None
+    colors : list, optional
+        A list of colors to be used, by default None
+    title : str, optional
+        The title of the figure, by default None
+    show : bool, optional
+        Whether or not the image should be displayed, by default True
+    save_path : str, optional
+        The path to the file where the image will be saved, by default None
+    """
     n_ped = len(pedestrians)
     ped_ids = [ped.ped_id for ped in pedestrians]
 
