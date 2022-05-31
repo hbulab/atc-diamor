@@ -18,3 +18,13 @@ COLORS = [
     "rebeccapurple",
     "crimson",
 ]
+
+TRAJECTORY_COLUMNS = {
+    "time": 0,
+    "x": 1,
+    "y": 2,
+    "z": 3,
+    "v": 4,
+    "vel_x": 5,
+    "vel_y": 6,
+}

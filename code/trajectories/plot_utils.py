@@ -19,7 +19,7 @@ def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=
     save_path : str, optional
         The path to the file where the image will be saved, by default None
     """
-    x, y = pedestrian.get_trajectory()[:, 1], pedestrian.get_trajectory()[:, 2]
+    x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
     plt.scatter(x / 1000, y / 1000, c="cornflowerblue", s=10)
     plt.xlabel("x (m)")
     plt.ylabel("y (m)")
@@ -52,7 +52,7 @@ def plot_animated_2D_trajectory(
     loop: bool, optional
         Wheter or not the animation should loop, by default False
     """
-    x, y = pedestrian.get_trajectory()[:, 1], pedestrian.get_trajectory()[:, 2]
+    x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
 
     colors = ["cornflowerblue"] * len(x)
 

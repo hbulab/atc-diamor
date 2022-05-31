@@ -1,5 +1,7 @@
+from asyncio import constants
 from trajectories.utils import *
 from trajectories.plot_utils import *
+from trajectories.constants import *
 
 
 class Pedestrian:
@@ -21,6 +23,16 @@ class Pedestrian:
 
     def get_trajectory(self):
         return self.trajectory
+
+    def set_trajectory(self, trajectory):
+        self.trajectory = trajectory
+
+    def get_trajectory_column(self, value):
+        if value not in TRAJECTORY_COLUMNS:
+            raise ValueError(
+                f"Unknown threshold value {value}. Should be one of {TRAJECTORY_COLUMNS.keys()}"
+            )
+        return self.trajectory[:, TRAJECTORY_COLUMNS[value]]
 
     def plot_2D_trajectory(
         self,

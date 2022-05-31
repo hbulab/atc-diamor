@@ -1,7 +1,8 @@
-from .utils import *
-from .constants import *
-from .pedestrian import Pedestrian
-from .group import Group
+from trajectories.utils import *
+from trajectories.trajectory_utils import *
+from trajectories.constants import *
+from trajectories.pedestrian import Pedestrian
+from trajectories.group import Group
 
 import os
 
@@ -16,7 +17,7 @@ class Environment:
         self.boundaries = BOUNDARIES_ATC if self.name == "atc" else BOUNDARIES_DIAMOR
         self.days = DAYS_ATC if self.name == "atc" else DAYS_DIAMOR
 
-    def get_pedestrians(self, days=None):
+    def get_pedestrians(self, thresholds=[], days=None):
 
         if days is None:
             days = self.days
@@ -50,9 +51,13 @@ class Environment:
                 pedestrian = Pedestrian(ped_id, self, day, trajectory, groups)
                 pedestrians += [pedestrian]
 
+        # apply the potential thresholds
+        for threshold in thresholds:
+            pedestrians = filter_pedestrians(pedestrians, threshold)
+
         return pedestrians
 
-    def get_groups(self, days=None, size=None):
+    def get_groups(self, days=None, thresholds=[], size=None):
         if days is None:
             days = self.days
 
@@ -103,7 +108,9 @@ class Environment:
 
         return groups
 
-    def get_groups_grouped_by(self, group_by_value, days=None, size=None):
+    def get_groups_grouped_by(
+        self, group_by_value, thresholds=[], days=None, size=None
+    ):
 
         groups = self.get_groups(days, size)
 
