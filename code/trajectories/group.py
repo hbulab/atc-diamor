@@ -3,13 +3,14 @@ from trajectories.trajectory_utils import *
 
 
 class Group:
-    def __init__(self, group_id, members, env, day):
+    def __init__(self, group_id, members, env, day, annotations):
 
         self.group_id = group_id
         self.members = members
         self.size = len(members)
         self.env = env
         self.day = day
+        self.annotations = annotations
 
         self.as_pedestrian = Pedestrian(
             group_id, env, day, self.get_center_of_mass_trajectory(), []
@@ -20,6 +21,12 @@ class Group:
 
     def __repr__(self):
         return f"Group({self.group_id})"
+
+    def get_as_pedestrian(self):
+        return self.as_pedestrian
+
+    def get_members(self):
+        return self.members
 
     def get_center_of_mass_trajectory(self):
         members_trajectories = [member.trajectory for member in self.members]

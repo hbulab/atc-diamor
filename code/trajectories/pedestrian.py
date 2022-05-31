@@ -19,6 +19,9 @@ class Pedestrian:
     def __repr__(self):
         return f"Pedestrian({self.ped_id})"
 
+    def get_trajectory(self):
+        return self.trajectory
+
     def plot_2D_trajectory(
         self,
         scale=False,
@@ -29,14 +32,12 @@ class Pedestrian:
         loop=False,
     ):
 
-        x, y = self.trajectory[:, 1], self.trajectory[:, 2]
-
         if scale:
             boundaries = self.env.boundaries
+        else:
+            boundaries = None
 
         if animate:
-            plot_animated_2D_trajectory(
-                x, y, self.ped_id, boundaries, show, save_path, loop
-            )
+            plot_animated_2D_trajectory(self, boundaries, show, save_path, loop)
         else:
-            plot_static_2D_trajectory(x, y, self.ped_id, boundaries, show, save_path)
+            plot_static_2D_trajectory(self, boundaries, show, save_path)

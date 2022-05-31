@@ -7,3 +7,14 @@ BOUNDARIES_ATC = {"xmin": -41000, "xmax": 49000, "ymin": -27500, "ymax": 24000}
 # ---------- DIAMOR constants ----------
 DAYS_DIAMOR = ["06", "08"]
 BOUNDARIES_DIAMOR = {"xmin": -200, "xmax": 60300, "ymin": -5300, "ymax": 12000}
+
+
+COLORS = [
+    "steelblue",
+    "yellowgreen",
+    "lightcoral",
+    "orange",
+    "gold",
+    "rebeccapurple",
+    "crimson",
+]

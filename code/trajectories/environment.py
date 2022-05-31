@@ -81,19 +81,42 @@ class Environment:
                 # skipping groups of the wrong size
                 if size is not None and group_data["size"] != size:
                     continue
+                # if group_data["size"] != len(group_data["members"]):
+                #     print("here")
                 for group_member_id in group_data["members"]:
                     if group_member_id in daily_traj:
                         trajectory = daily_traj[group_member_id]
                     else:
-                        # print(
-                        #     f"Skipping group {group_id}, trajectory missing for {group_member_id}."
-                        # )
                         continue
                     group_member = Pedestrian(
                         group_member_id, self, day, trajectory, [group_id]
                     )
                     members += [group_member]
-                group = Group(group_id, members, self, day)
+                # missing
+                if len(members) != group_data["size"]:
+                    # print(
+                    #     f"Skipping group {group_id}, trajectory missing for members."
+                    # )
+                    continue
+                group = Group(group_id, members, self, day, group_data)
                 groups += [group]
 
         return groups
+
+    def get_groups_grouped_by(self, group_by_value, days=None, size=None):
+
+        groups = self.get_groups(days, size)
+
+        grouped_groups = {}
+        for group in groups:
+            if group_by_value not in group.annotations:
+                # raise AttributeError(
+                #     f"Group-by value '{group_by_value}' not found in group {group}."
+                # )
+                continue
+            value = group.annotations[group_by_value]
+            if value not in grouped_groups:
+                grouped_groups[value] = []
+            grouped_groups[value] += [group]
+
+        return grouped_groups
