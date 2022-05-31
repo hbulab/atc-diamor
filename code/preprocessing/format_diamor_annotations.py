@@ -15,6 +15,7 @@ if __name__ == "__main__":
         group_data = pickle_load(group_annotations)
 
         groups_data = {}
+        individuals_data = {}
 
         for groups in group_data:
             for group in groups:
@@ -25,6 +26,13 @@ if __name__ == "__main__":
                     groups_data[group_id] = {
                         "size": len(group),
                     }
+
+                for ped_id in group_members:
+                    if ped_id not in individuals_data:
+                        individuals_data[ped_id] = {
+                            "groups": [],
+                        }
+                    individuals_data[ped_id]["groups"] += [group_id]
 
         interaction_annotations = os.path.join(dir_path, f"gt_2p_yoshioka_{day}.pkl")
         interaction_data = pickle_load(interaction_annotations)
@@ -37,10 +45,21 @@ if __name__ == "__main__":
             else:
                 groups_data[group_id]["interaction"] = row[4]
 
+            for ped_id in group_members:
+                if ped_id not in individuals_data:
+                    individuals_data[ped_id] = {
+                        "groups": [],
+                    }
+                individuals_data[ped_id]["groups"] += [group_id]
+
         groups_annotations_path = (
             f"../../data/formatted/diamor/groups_annotations_{day}.pkl"
         )
         pickle_save(groups_annotations_path, groups_data)
+        individuals_annotations_path = (
+            f"../../data/formatted/diamor/individuals_annotations_{day}.pkl"
+        )
+        pickle_save(individuals_annotations_path, individuals_data)
         print(
-            f"Saving {len(groups_data)} groups annotations to {groups_annotations_path}."
+            f"Saving {len(groups_data)} groups annotations to {groups_annotations_path} and {len(individuals_data)} individuals annotations to {individuals_annotations_path}."
         )
