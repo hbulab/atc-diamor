@@ -34,6 +34,9 @@ class Pedestrian:
             )
         return self.trajectory[:, TRAJECTORY_COLUMNS[value]]
 
+    def get_position(self):
+        return self.trajectory[1:3]
+
     def plot_2D_trajectory(
         self,
         scale=False,

@@ -97,6 +97,9 @@ class Environment:
                         group_member_id, self, day, trajectory, [group_id]
                     )
                     members += [group_member]
+                # apply the potential thresholds
+                for threshold in thresholds:
+                    members = filter_pedestrians(members, threshold)
                 # missing
                 if len(members) != group_data["size"]:
                     # print(
