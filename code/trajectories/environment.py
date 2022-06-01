@@ -17,7 +17,7 @@ class Environment:
         self.boundaries = BOUNDARIES_ATC if self.name == "atc" else BOUNDARIES_DIAMOR
         self.days = DAYS_ATC if self.name == "atc" else DAYS_DIAMOR
 
-    def get_pedestrians(self, thresholds=[], days=None):
+    def get_pedestrians(self, thresholds=[], no_groups=False, days=None):
 
         if days is None:
             days = self.days
@@ -47,6 +47,9 @@ class Environment:
                     groups = individual_annotations[ped_id]["groups"]
                 else:
                     groups = []
+
+                if no_groups and len(groups) > 0:
+                    continue
 
                 pedestrian = Pedestrian(ped_id, self, day, trajectory, groups)
                 pedestrians += [pedestrian]
@@ -115,7 +118,7 @@ class Environment:
         self, group_by_value, thresholds=[], days=None, size=None
     ):
 
-        groups = self.get_groups(days, size)
+        groups = self.get_groups(days, size=size, thresholds=thresholds)
 
         grouped_groups = {}
         for group in groups:
