@@ -37,6 +37,27 @@ class Pedestrian:
     def get_position(self):
         return self.trajectory[1:3]
 
+    def get_encounters(self, proximity_threshold, pedestrians):
+        encounters = []
+        for pedestrian in pedestrians:
+            if pedestrian.ped_id == self.ped_id:
+                continue
+            if not have_simultaneous_observations(
+                [self.trajectory, pedestrian.get_trajectory()]
+            ):
+                continue
+            if (
+                min(
+                    compute_interpersonal_distance(
+                        self.trajectory, pedestrian.get_trajectory()
+                    )
+                )
+                > proximity_threshold
+            ):
+                continue
+            encounters += [pedestrian]
+        return encounters
+
     def plot_2D_trajectory(
         self,
         scale=False,

@@ -30,6 +30,25 @@ def compute_simultaneous_observations(trajectories):
     return simult_trajectories
 
 
+def have_simultaneous_observations(trajectories):
+    return len(compute_simultaneous_observations(trajectories)[0]) > 0
+
+
+def get_padded_trajectories(trajectories):
+    all_times = trajectories[0][:, 0]
+    for trajectory in trajectories[1:]:
+        all_times = np.union1d(all_times, trajectory[:, 0])
+
+    padded_trajectories = []
+    for trajectory in trajectories:
+        indices_times = np.in1d(all_times, trajectory[:, 0])
+        padded_trajectory = np.full((len(all_times), 7), np.nan)
+        padded_trajectory[indices_times, :] = trajectory
+        padded_trajectories += [padded_trajectory]
+
+    return padded_trajectories
+
+
 def compute_interpersonal_distance(trajectory_A, trajectory_B):
     """Compute the pair-wise distances between two trajectories
 
