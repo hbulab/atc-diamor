@@ -6,7 +6,7 @@ class Threshold:
 
         if value not in TRAJECTORY_COLUMNS:
             raise ValueError(
-                f"Unknown threshold value {value}. Should be one of {TRAJECTORY_COLUMNS.keys()}"
+                f"Unknown threshold value {value}. Should be one of {list(TRAJECTORY_COLUMNS.keys())}"
             )
 
         self.value = value

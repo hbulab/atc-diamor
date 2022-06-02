@@ -30,7 +30,7 @@ class Pedestrian:
     def get_trajectory_column(self, value):
         if value not in TRAJECTORY_COLUMNS:
             raise ValueError(
-                f"Unknown threshold value {value}. Should be one of {TRAJECTORY_COLUMNS.keys()}"
+                f"Unknown threshold value {value}. Should be one of {list(TRAJECTORY_COLUMNS.keys())}"
             )
         return self.trajectory[:, TRAJECTORY_COLUMNS[value]]
 

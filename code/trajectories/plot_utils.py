@@ -169,6 +169,7 @@ def plot_animated_2D_trajectories(
     pedestrians,
     simultaneous=False,
     boundaries=None,
+    vicinity=None,
     colors=None,
     title=None,
     show=True,
@@ -216,7 +217,6 @@ def plot_animated_2D_trajectories(
             colors = COLORS[:n_ped]
 
     fig, ax = plt.subplots()
-    ax.scatter([], [], c=[])  # plot of x and y in time
 
     if boundaries:
         xmin, xmax = boundaries["xmin"] / 1000, boundaries["xmax"] / 1000
@@ -231,24 +231,32 @@ def plot_animated_2D_trajectories(
             max([np.nanmax(pos[:, 1]) for pos in positions]),
         )
 
-    def animate(i, ax, positions, colors, title):
+    def animate(i, ax, positions, vicinity, colors, title):
         ax.clear()
+        ax.axis([xmin, xmax, ymin, ymax])
+        ax.set_aspect("equal", "box")
+        if vicinity:  # set the size of the marker for the vicinity
+            M = ax.transData.get_matrix()
+            scale = M[0, 0]
+            s = s = (scale * vicinity / 1000) ** 2
+            for position, color in zip(positions, colors):
+                ax.scatter(
+                    position[i, 0],
+                    position[i, 1],
+                    c=color,
+                    s=s,
+                    alpha=0.3,
+                )
+
         for position, color in zip(positions, colors):
-            print(position)
             ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10)
         ax.set_title(title)
-        ax.axis([xmin, xmax, ymin, ymax])
-
-    ax.axis([xmin, xmax, ymin, ymax])
-
-    ax.set_title(title)
-    ax.set_autoscale_on(False)
 
     ani = animation.FuncAnimation(
         fig,
         animate,
         range(len(positions[0][:, 0])),
-        fargs=(ax, positions, colors, title),
+        fargs=(ax, positions, vicinity, colors, title),
         repeat=loop,
         interval=50,
         blit=False,
