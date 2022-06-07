@@ -1,5 +1,5 @@
-from trajectories.environment import Environment
-from trajectories.threshold import Threshold
+from package.src.pedestrians_social_binding.environment import Environment
+from package.src.pedestrians_social_binding.threshold import Threshold
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,8 +55,8 @@ if __name__ == "__main__":
     dyads = atc.get_groups(size=2, thresholds=[threshold_x, threshold_y])
 
     for dyad in dyads:
-        x = dyad.get_as_pedestrian().get_trajectory_column("x")
-        y = dyad.get_as_pedestrian().get_trajectory_column("y")
+        x = dyad.get_as_individual().get_trajectory_column("x")
+        y = dyad.get_as_individual().get_trajectory_column("y")
 
         nx = np.ceil((x - XMIN) / GRID_SIZE).astype("int")
         ny = np.ceil((y - YMIN) / GRID_SIZE).astype("int")

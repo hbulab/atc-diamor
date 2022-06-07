@@ -20,11 +20,13 @@ COLORS = [
 ]
 
 TRAJECTORY_COLUMNS = {
-    "time": 0,
+    "t": 0,
     "x": 1,
     "y": 2,
     "z": 3,
     "v": 4,
-    "vel_x": 5,
-    "vel_y": 6,
+    "v_x": 5,
+    "v_y": 6,
 }
+
+THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d"]

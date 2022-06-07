@@ -1,8 +1,8 @@
-from trajectories.utils import *
-from trajectories.trajectory_utils import *
-from trajectories.constants import *
-from trajectories.pedestrian import Pedestrian
-from trajectories.group import Group
+from pedestrians_social_binding.utils import *
+from pedestrians_social_binding.trajectory_utils import *
+from pedestrians_social_binding.constants import *
+from pedestrians_social_binding.pedestrian import Pedestrian
+from pedestrians_social_binding.group import Group
 
 import os
 
@@ -17,7 +17,9 @@ class Environment:
         self.boundaries = BOUNDARIES_ATC if self.name == "atc" else BOUNDARIES_DIAMOR
         self.days = DAYS_ATC if self.name == "atc" else DAYS_DIAMOR
 
-    def get_pedestrians(self, thresholds=[], no_groups=False, days=None):
+    def get_pedestrians(
+        self, ids=[], thresholds=[], no_groups=False, days=None
+    ) -> list[Pedestrian]:
 
         if days is None:
             days = self.days
@@ -42,6 +44,8 @@ class Environment:
             individual_annotations = pickle_load(individual_annotations_path)
 
             for ped_id in daily_traj:
+                if ids and ped_id not in ids:
+                    continue
                 trajectory = daily_traj[ped_id]
                 if ped_id in individual_annotations:
                     groups = individual_annotations[ped_id]["groups"]
@@ -60,7 +64,7 @@ class Environment:
 
         return pedestrians
 
-    def get_groups(self, days=None, thresholds=[], size=None):
+    def get_groups(self, ids=[], days=None, thresholds=[], size=None) -> list[Group]:
         if days is None:
             days = self.days
 
@@ -84,6 +88,8 @@ class Environment:
             groups_annotations = pickle_load(groups_annotations_path)
 
             for group_id in groups_annotations:
+                if ids and group_id not in ids:
+                    continue
                 group_data = groups_annotations[group_id]
                 members = []
                 # skipping groups of the wrong size

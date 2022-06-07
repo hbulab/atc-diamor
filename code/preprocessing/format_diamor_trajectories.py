@@ -25,9 +25,9 @@ if __name__ == "__main__":
             times = position_data[str(ped_id)]["time"]
             pos_xy = position_data[str(ped_id)]["traj"]
             pos_z = np.full((times.shape), 0.0)
-            vel = velocity_data[str(ped_id)]["velocity"]
-            vel_x = velocity_data[str(ped_id)]["vx"]
-            vel_y = velocity_data[str(ped_id)]["vy"]
+            vel = velocity_data[str(ped_id)]["velocity"] * 1000
+            vel_x = velocity_data[str(ped_id)]["vx"] * 1000
+            vel_y = velocity_data[str(ped_id)]["vy"] * 1000
 
             if len(times) > 3:  # need at least four data points
 
@@ -36,7 +36,7 @@ if __name__ == "__main__":
                 traj = np.concatenate(
                     (times[:-2], pos_xy[:-2], pos_z[:-2], vel, vel_x, vel_y), axis=1
                 )
-                print(traj.shape)
+                # print(traj.shape)
 
                 daily_traj[ped_id] = traj
 

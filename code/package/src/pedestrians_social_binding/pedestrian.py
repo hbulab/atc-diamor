@@ -1,7 +1,7 @@
 from asyncio import constants
-from trajectories.utils import *
-from trajectories.plot_utils import *
-from trajectories.constants import *
+from pedestrians_social_binding.utils import *
+from pedestrians_social_binding.plot_utils import *
+from pedestrians_social_binding.constants import *
 
 
 class Pedestrian:
@@ -21,6 +21,9 @@ class Pedestrian:
     def __repr__(self):
         return f"Pedestrian({self.ped_id})"
 
+    def get_id(self):
+        return self.ped_id
+
     def get_trajectory(self):
         return self.trajectory
 
@@ -35,12 +38,14 @@ class Pedestrian:
         return self.trajectory[:, TRAJECTORY_COLUMNS[value]]
 
     def get_position(self):
-        return self.trajectory[1:3]
+        return self.trajectory[:, 1:3]
 
-    def get_encounters(self, proximity_threshold, pedestrians):
+    def get_encountered_pedestrians(self, proximity_threshold, pedestrians, skip=[]):
         encounters = []
         for pedestrian in pedestrians:
-            if pedestrian.ped_id == self.ped_id:
+            if (
+                pedestrian.ped_id == self.ped_id or pedestrian.ped_id in skip
+            ):  # don't compare with himself or ped to skip
                 continue
             if not have_simultaneous_observations(
                 [self.trajectory, pedestrian.get_trajectory()]
@@ -60,9 +65,8 @@ class Pedestrian:
 
     def plot_2D_trajectory(
         self,
-        scale=False,
+        scale=True,
         animate=False,
-        colors=None,
         show=True,
         save_path=None,
         loop=False,

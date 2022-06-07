@@ -1,4 +1,4 @@
-from trajectories.environment import Environment
+from package.src.pedestrians_social_binding.environment import Environment
 
 if __name__ == "__main__":
 

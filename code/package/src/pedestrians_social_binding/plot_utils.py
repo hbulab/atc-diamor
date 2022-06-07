@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from trajectories.trajectory_utils import *
-from trajectories.constants import *
+from pedestrians_social_binding.trajectory_utils import *
+from pedestrians_social_binding.constants import *
 
 
 def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=None):
@@ -231,7 +231,7 @@ def plot_animated_2D_trajectories(
             max([np.nanmax(pos[:, 1]) for pos in positions]),
         )
 
-    def animate(i, ax, positions, vicinity, colors, title):
+    def animate(i, ax, ped_ids, positions, vicinity, colors, title):
         ax.clear()
         ax.axis([xmin, xmax, ymin, ymax])
         ax.set_aspect("equal", "box")
@@ -248,15 +248,16 @@ def plot_animated_2D_trajectories(
                     alpha=0.3,
                 )
 
-        for position, color in zip(positions, colors):
-            ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10)
+        for ped_id, position, color in zip(ped_ids, positions, colors):
+            ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=ped_id)
         ax.set_title(title)
+        ax.legend()
 
     ani = animation.FuncAnimation(
         fig,
         animate,
         range(len(positions[0][:, 0])),
-        fargs=(ax, positions, vicinity, colors, title),
+        fargs=(ax, ped_ids, positions, vicinity, colors, title),
         repeat=loop,
         interval=50,
         blit=False,

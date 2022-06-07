@@ -1,5 +1,5 @@
-from trajectories.pedestrian import Pedestrian
-from trajectories.trajectory_utils import *
+from pedestrians_social_binding.pedestrian import Pedestrian
+from pedestrians_social_binding.trajectory_utils import *
 
 
 class Group:
@@ -12,7 +12,7 @@ class Group:
         self.day = day
         self.annotations = annotations
 
-        self.as_pedestrian = Pedestrian(
+        self.as_individual = Pedestrian(
             group_id, env, day, self.get_center_of_mass_trajectory(), []
         )
 
@@ -22,8 +22,11 @@ class Group:
     def __repr__(self):
         return f"Group({self.group_id})"
 
-    def get_as_pedestrian(self):
-        return self.as_pedestrian
+    def get_as_individual(self) -> Pedestrian:
+        return self.as_individual
+
+    def get_id(self):
+        return self.group_id
 
     def get_members(self):
         return self.members

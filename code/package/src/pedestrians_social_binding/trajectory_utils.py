@@ -1,5 +1,6 @@
+from pedestrians_social_binding.constants import *
+
 import numpy as np
-from regex import R
 
 
 def compute_simultaneous_observations(trajectories):
@@ -80,40 +81,55 @@ def filter_pedestrian(pedestrian, threshold):
     value = threshold.get_value()
     min_val = threshold.get_min_value()
     max_val = threshold.get_max_value()
-    aggregate = threshold.is_aggregate()
 
-    column = pedestrian.get_trajectory_column(value)
-
-    if not aggregate:
-        if min_val and max_val:
-            threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
-        elif min_val:
-            threshold_indices = np.where(column >= min_val)[0]
-        else:
-            threshold_indices = np.where(column <= max_val)[0]
-
-        if len(threshold_indices) > 0:
-            trajectory = pedestrian.get_trajectory()[threshold_indices, :]
-            pedestrian.set_trajectory(trajectory)
-            return pedestrian
-        else:
-            return None
-
-    else:
-        aggregate_val = column[-1] - column[0]
+    if value == "d":  # threshold on the distance
+        position = pedestrian.get_position()
+        d = np.linalg.norm(position[-1] - position[0])
         if (
             (
-                min_val
-                and max_val
-                and aggregate_val >= min_val
-                and aggregate_val <= max_val
+                min_val is not None
+                and max_val is not None
+                and d <= max_val
+                and d >= min_val
             )
-            or (min_val and aggregate_val >= min_val)
-            or (max_val and aggregate_val <= max_val)
+            or (min_val is not None and d >= min_val)
+            or (max_val is not None and d <= max_val)
         ):
             return pedestrian
         else:
             return None
+
+    if value == "t":  # threshold on the tome
+        time = pedestrian.get_colum("t")
+        t_obs = time[-1] - time[0]
+        if (
+            (
+                min_val is not None
+                and max_val is not None
+                and t_obs <= max_val
+                and t_obs >= min_val
+            )
+            or (min_val is not None and t_obs >= min_val)
+            or (max_val is not None and t_obs <= max_val)
+        ):
+            return pedestrian
+        else:
+            return None
+
+    column = pedestrian.get_trajectory_column(value)
+    if min_val is not None and max_val is not None:
+        threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
+    elif min_val is not None:
+        threshold_indices = np.where(column >= min_val)[0]
+    else:
+        threshold_indices = np.where(column <= max_val)[0]
+
+    if len(threshold_indices) > 0:
+        trajectory = pedestrian.get_trajectory()[threshold_indices, :]
+        pedestrian.set_trajectory(trajectory)
+        return pedestrian
+    else:
+        return None
 
 
 def filter_pedestrians(pedestrians, threshold):

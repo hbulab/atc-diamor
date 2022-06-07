@@ -1,7 +1,7 @@
-from trajectories.environment import Environment
-from trajectories.constants import *
-from trajectories.trajectory_utils import *
-from trajectories.plot_utils import *
+from package.src.pedestrians_social_binding.environment import Environment
+from package.src.pedestrians_social_binding.constants import *
+from package.src.pedestrians_social_binding.trajectory_utils import *
+from package.src.pedestrians_social_binding.plot_utils import *
 
 import matplotlib.pyplot as plt
 
