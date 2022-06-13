@@ -40,7 +40,7 @@ class Pedestrian:
     def get_position(self):
         return self.trajectory[:, 1:3]
 
-    def get_encountered_pedestrians(self, proximity_threshold, pedestrians, skip=[]):
+    def get_encountered_pedestrians(self, pedestrians, proximity_threshold=4000, skip=[]):
         encounters = []
         for pedestrian in pedestrians:
             if (
@@ -51,12 +51,11 @@ class Pedestrian:
                 [self.trajectory, pedestrian.get_trajectory()]
             ):
                 continue
-            if (
-                min(
-                    compute_interpersonal_distance(
-                        self.trajectory, pedestrian.get_trajectory()
-                    )
-                )
+            sim_traj, sim_traj_ped = compute_simultaneous_observations(
+                [self.trajectory, pedestrian.get_trajectory()]
+            )
+            if proximity_threshold is not None and  (
+                min(compute_interpersonal_distance(sim_traj, sim_traj_ped))
                 > proximity_threshold
             ):
                 continue
@@ -81,3 +80,24 @@ class Pedestrian:
             plot_animated_2D_trajectory(self, boundaries, show, save_path, loop)
         else:
             plot_static_2D_trajectory(self, boundaries, show, save_path)
+
+    def get_undisturbed_trajectory(self, proximity_threshold, pedestrians, skip=[]):
+        traj = self.trajectory
+        times_in_vicinity = np.array([])
+        for pedestrian in pedestrians:
+            if (
+                pedestrian.ped_id == self.ped_id or pedestrian.ped_id in skip
+            ):  # don't compare with members or ped to skip
+                continue
+            if not have_simultaneous_observations([traj, pedestrian.get_trajectory()]):
+                continue
+            sim_traj_group, sim_traj_ped = compute_simultaneous_observations(
+                [traj, pedestrian.get_trajectory()]
+            )
+
+            distance = compute_interpersonal_distance(sim_traj_group, sim_traj_ped)
+            times_in_vicinity = np.union1d(
+                times_in_vicinity, sim_traj_group[distance < proximity_threshold][:, 0]
+            )
+
+        return get_trajectory_not_at_times(traj, times_in_vicinity)

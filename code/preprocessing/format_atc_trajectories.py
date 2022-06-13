@@ -28,9 +28,9 @@ if __name__ == "__main__":
                 (n_points, 1)
             )  # add seconds and milliseconds columns
             pos_xyz = traj[:, 4:7]
-            vel = traj[:, 7].reshape((n_points, 1))
-            vel_x = traj[:, 8].reshape((n_points, 1))
-            vel_y = traj[:, 9].reshape((n_points, 1))
+            vel = traj[:, 10].reshape((n_points, 1))
+            vel_x = traj[:, 11].reshape((n_points, 1))
+            vel_y = traj[:, 12].reshape((n_points, 1))
 
             if len(times) > 3:  # need at least four data points
                 # if pos contains N elements, vel contains N - 2

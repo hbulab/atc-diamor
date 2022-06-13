@@ -168,6 +168,7 @@ def plot_static_2D_trajectories(
 def plot_animated_2D_trajectories(
     pedestrians,
     simultaneous=False,
+    vel=False,
     boundaries=None,
     vicinity=None,
     colors=None,
@@ -206,6 +207,7 @@ def plot_animated_2D_trajectories(
         )
 
     positions = [traj[:, 1:3] / 1000 for traj in trajectories]
+    velocities = [traj[:, 5:7] / 1000 for traj in trajectories]
 
     if title is None:
         title = f"Trajectories for {'-'.join([str(ped.ped_id) for ped in pedestrians])}"
@@ -231,7 +233,7 @@ def plot_animated_2D_trajectories(
             max([np.nanmax(pos[:, 1]) for pos in positions]),
         )
 
-    def animate(i, ax, ped_ids, positions, vicinity, colors, title):
+    def animate(i, ax, ped_ids, positions, velocities, vicinity, colors, title):
         ax.clear()
         ax.axis([xmin, xmax, ymin, ymax])
         ax.set_aspect("equal", "box")
@@ -248,6 +250,18 @@ def plot_animated_2D_trajectories(
                     alpha=0.3,
                 )
 
+        if vel:
+            for position, velocity, color in zip(positions, velocities, colors):
+                ax.arrow(
+                    position[i, 0],
+                    position[i, 1],
+                    velocity[i, 0],
+                    velocity[i, 1],
+                    color="black",
+                    head_length=1,
+                    head_width=0.5,
+                )
+
         for ped_id, position, color in zip(ped_ids, positions, colors):
             ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=ped_id)
         ax.set_title(title)
@@ -257,7 +271,7 @@ def plot_animated_2D_trajectories(
         fig,
         animate,
         range(len(positions[0][:, 0])),
-        fargs=(ax, ped_ids, positions, vicinity, colors, title),
+        fargs=(ax, ped_ids, positions, velocities, vicinity, colors, title),
         repeat=loop,
         interval=50,
         blit=False,

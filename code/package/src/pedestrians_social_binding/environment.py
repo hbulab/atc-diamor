@@ -64,7 +64,30 @@ class Environment:
 
         return pedestrians
 
-    def get_groups(self, ids=[], days=None, thresholds=[], size=None) -> list[Group]:
+    def get_pedestrians_grouped_by(
+        self, group_by_value, ids=[], thresholds=[], no_groups=False, days=None
+    ) -> dict[any, Pedestrian]:
+        pedestrians = self.get_pedestrians(
+            ids=ids, thresholds=thresholds, no_groups=no_groups, days=days
+        )
+
+        grouped_pedestrians = {}
+        for pedestrian in pedestrians:
+            if not hasattr(pedestrian, group_by_value):
+                # raise AttributeError(
+                #     f"Group-by value '{group_by_value}' not found in group {group}."
+                # )
+                continue
+            value = getattr(pedestrian, group_by_value)
+            if value not in grouped_pedestrians:
+                grouped_pedestrians[value] = []
+            grouped_pedestrians[value] += [pedestrian]
+
+        return grouped_pedestrians
+
+    def get_groups(
+        self, ids=[], days=None, ped_thresholds=[], group_thresholds=[], size=None
+    ) -> list[Group]:
         if days is None:
             days = self.days
 
@@ -106,8 +129,8 @@ class Environment:
                         group_member_id, self, day, trajectory, [group_id]
                     )
                     members += [group_member]
-                # apply the potential thresholds
-                for threshold in thresholds:
+                # apply the potential ped thresholds
+                for threshold in ped_thresholds:
                     members = filter_pedestrians(members, threshold)
                 # missing
                 if len(members) != group_data["size"]:
@@ -115,14 +138,22 @@ class Environment:
                     #     f"Skipping group {group_id}, trajectory missing for members."
                     # )
                     continue
+
+                # apply the potential group thresholds
                 group = Group(group_id, members, self, day, group_data)
-                groups += [group]
+                keep = True
+                for threshold in group_thresholds:
+                    if not filter_group(group, threshold):
+                        keep = False
+                        continue
+                if keep:
+                    groups += [group]
 
         return groups
 
     def get_groups_grouped_by(
         self, group_by_value, thresholds=[], days=None, size=None
-    ):
+    ) -> dict[any, Group]:
 
         groups = self.get_groups(days, size=size, thresholds=thresholds)
 

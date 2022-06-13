@@ -7,6 +7,7 @@ BOUNDARIES_ATC = {"xmin": -41000, "xmax": 49000, "ymin": -27500, "ymax": 24000}
 # ---------- DIAMOR constants ----------
 DAYS_DIAMOR = ["06", "08"]
 BOUNDARIES_DIAMOR = {"xmin": -200, "xmax": 60300, "ymin": -5300, "ymax": 12000}
+INTENSITIES_OF_INTERACTION_NUM = ["0", "1", "2", "3"]
 
 
 COLORS = [
@@ -29,4 +30,12 @@ TRAJECTORY_COLUMNS = {
     "v_y": 6,
 }
 
-THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d"]
+THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d", "delta"]
+
+REL_DIRS = ["opposite", "same", "cross"]
+
+DEFLECTION_MEASURES = [
+    "straightness_index",
+    "sinuosity",
+    "maximum_scaled_lateral_deviation",
+]
