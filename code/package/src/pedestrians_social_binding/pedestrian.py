@@ -40,7 +40,9 @@ class Pedestrian:
     def get_position(self):
         return self.trajectory[:, 1:3]
 
-    def get_encountered_pedestrians(self, pedestrians, proximity_threshold=4000, skip=[]):
+    def get_encountered_pedestrians(
+        self, pedestrians, proximity_threshold=4000, skip=[]
+    ):
         encounters = []
         for pedestrian in pedestrians:
             if (
@@ -54,7 +56,7 @@ class Pedestrian:
             sim_traj, sim_traj_ped = compute_simultaneous_observations(
                 [self.trajectory, pedestrian.get_trajectory()]
             )
-            if proximity_threshold is not None and  (
+            if proximity_threshold is not None and (
                 min(compute_interpersonal_distance(sim_traj, sim_traj_ped))
                 > proximity_threshold
             ):
@@ -76,10 +78,25 @@ class Pedestrian:
         else:
             boundaries = None
 
+        trajectory = self.trajectory
+
         if animate:
-            plot_animated_2D_trajectory(self, boundaries, show, save_path, loop)
+            plot_animated_2D_trajectory(
+                trajectory,
+                title=f"Trajectory for {self.ped_id}",
+                boundaries=boundaries,
+                show=show,
+                save_path=save_path,
+                loop=loop,
+            )
         else:
-            plot_static_2D_trajectory(self, boundaries, show, save_path)
+            plot_static_2D_trajectory(
+                trajectory,
+                title=f"Trajectory for {self.ped_id}",
+                boundaries=boundaries,
+                show=show,
+                save_path=save_path,
+            )
 
     def get_undisturbed_trajectory(self, proximity_threshold, pedestrians, skip=[]):
         traj = self.trajectory

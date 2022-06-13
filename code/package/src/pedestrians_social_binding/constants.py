@@ -39,3 +39,5 @@ DEFLECTION_MEASURES = [
     "sinuosity",
     "maximum_scaled_lateral_deviation",
 ]
+
+SOCIAL_BINDING = {"atc": "soc_rel", "diamor": "interaction"}

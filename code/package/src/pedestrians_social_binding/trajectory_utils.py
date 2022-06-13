@@ -53,10 +53,26 @@ def get_trajectory_at_times(trajectory, times):
     return trajectory[at_times]
 
 
+def get_trajectories_at_times(trajectories, times):
+    trajectories_at_time = []
+    for trajectory in trajectories:
+        trajectories_at_time += [get_trajectory_at_times(trajectory, times)]
+
+    return trajectories_at_time
+
+
 def get_trajectory_not_at_times(trajectory, times):
     times_traj = trajectory[:, 0]
     at_times = np.isin(times_traj, times)
     return trajectory[np.logical_not(at_times)]
+
+
+def get_trajectories_not_at_times(trajectories, times):
+    trajectories_not_at_time = []
+    for trajectory in trajectories:
+        trajectories_not_at_time += [get_trajectory_not_at_times(trajectory, times)]
+
+    return trajectories_not_at_time
 
 
 def get_padded_trajectories(trajectories, extend=True):

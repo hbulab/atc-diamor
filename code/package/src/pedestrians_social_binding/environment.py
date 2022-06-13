@@ -65,10 +65,18 @@ class Environment:
         return pedestrians
 
     def get_pedestrians_grouped_by(
-        self, group_by_value, ids=[], thresholds=[], no_groups=False, days=None
+        self,
+        group_by_value,
+        ids=[],
+        thresholds=[],
+        no_groups=False,
+        days=None,
     ) -> dict[any, Pedestrian]:
         pedestrians = self.get_pedestrians(
-            ids=ids, thresholds=thresholds, no_groups=no_groups, days=days
+            ids=ids,
+            thresholds=thresholds,
+            no_groups=no_groups,
+            days=days,
         )
 
         grouped_pedestrians = {}
@@ -86,7 +94,13 @@ class Environment:
         return grouped_pedestrians
 
     def get_groups(
-        self, ids=[], days=None, ped_thresholds=[], group_thresholds=[], size=None
+        self,
+        ids=[],
+        days=None,
+        ped_thresholds=[],
+        group_thresholds=[],
+        size=None,
+        with_social_binding=False,
     ) -> list[Group]:
         if days is None:
             days = self.days
@@ -113,7 +127,12 @@ class Environment:
             for group_id in groups_annotations:
                 if ids and group_id not in ids:
                     continue
+
                 group_data = groups_annotations[group_id]
+
+                if with_social_binding and not SOCIAL_BINDING[self.name] in group_data:
+                    continue
+
                 members = []
                 # skipping groups of the wrong size
                 if size is not None and group_data["size"] != size:
@@ -152,10 +171,20 @@ class Environment:
         return groups
 
     def get_groups_grouped_by(
-        self, group_by_value, thresholds=[], days=None, size=None
+        self,
+        group_by_value,
+        thresholds=[],
+        days=None,
+        size=None,
+        with_social_binding=False,
     ) -> dict[any, Group]:
 
-        groups = self.get_groups(days, size=size, thresholds=thresholds)
+        groups = self.get_groups(
+            days,
+            size=size,
+            thresholds=thresholds,
+            with_social_binding=with_social_binding,
+        )
 
         grouped_groups = {}
         for group in groups:

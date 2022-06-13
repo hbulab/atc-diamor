@@ -5,7 +5,9 @@ from pedestrians_social_binding.trajectory_utils import *
 from pedestrians_social_binding.constants import *
 
 
-def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=None):
+def plot_static_2D_trajectory(
+    trajectory, title=None, boundaries=None, show=True, save_path=None
+):
     """Plot the trajectory of a pedestrian, as an image
 
     Parameters
@@ -19,14 +21,16 @@ def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=
     save_path : str, optional
         The path to the file where the image will be saved, by default None
     """
-    x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
+    x, y = trajectory[:, 1], trajectory[:, 2]
+    # x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
     plt.scatter(x / 1000, y / 1000, c="cornflowerblue", s=10)
     plt.xlabel("x (m)")
     plt.ylabel("y (m)")
     if boundaries:
         plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
         plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
-    plt.title(f"Trajectory of pedestrian {pedestrian.ped_id}")
+    if title is not None:
+        plt.title(title)
     if show:
         plt.show()
 
@@ -35,7 +39,7 @@ def plot_static_2D_trajectory(pedestrian, boundaries=None, show=True, save_path=
 
 
 def plot_animated_2D_trajectory(
-    pedestrian, boundaries=None, show=True, save_path=None, loop=False
+    trajectory, title=None, boundaries=None, show=True, save_path=None, loop=False
 ):
     """Plot the trajectory of a pedestrian, as an animation
 
@@ -52,7 +56,8 @@ def plot_animated_2D_trajectory(
     loop: bool, optional
         Whether or not the animation should loop, by default False
     """
-    x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
+    x, y = trajectory[:, 1], trajectory[:, 2]
+    # x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
 
     colors = ["cornflowerblue"] * len(x)
 
@@ -69,12 +74,13 @@ def plot_animated_2D_trajectory(
     def animate(i, ax, pos_Nx, pos_Ny, colorsN):
         ax.clear()
         ax.scatter(pos_Nx[:i], pos_Ny[:i], c=colorsN[:i], s=10)
-        ax.set_title(f"Trajectory of {pedestrian.ped_id}")
+        ax.set_title(title)
         ax.axis([xmin, xmax, ymin, ymax])
 
     ax.axis([xmin, xmax, ymin, ymax])
 
-    ax.set_title(f"Trajectory of {pedestrian.ped_id}")
+    if title is not None:
+        ax.set_title(title)
     ax.set_autoscale_on(False)
 
     ani = animation.FuncAnimation(
@@ -99,7 +105,8 @@ def plot_animated_2D_trajectory(
 
 
 def plot_static_2D_trajectories(
-    pedestrians,
+    trajectories,
+    labels=None,
     simultaneous=False,
     boundaries=None,
     colors=None,
@@ -111,8 +118,8 @@ def plot_static_2D_trajectories(
 
     Parameters
     ----------
-    pedestrians : list
-        A list of pedestrians
+    trajectories : list
+        A list of trajectories
     simultaneous : bool, optional
         Whether or not the trajectories should be cropped to the simultaneous observations, by default False
     boundaries : obj, optional
@@ -126,36 +133,34 @@ def plot_static_2D_trajectories(
     save_path : str, optional
         The path to the file where the image will be saved, by default None
     """
-    n_ped = len(pedestrians)
-    ped_ids = [ped.ped_id for ped in pedestrians]
+    n_traj = len(trajectories)
 
     if simultaneous:
-        trajectories = compute_simultaneous_observations(
-            [ped.get_trajectory() for ped in pedestrians]
-        )
-    else:
-        trajectories = [ped.get_trajectory() for ped in pedestrians]
-
-    if title is None:
-        title = f"Trajectories for {'-'.join([str(ped.ped_id) for ped in pedestrians])}"
+        trajectories = compute_simultaneous_observations(trajectories)
 
     if not colors:
-        if n_ped > len(COLORS):
-            colors = np.random.choice(COLORS, n_ped)
+        if n_traj > len(COLORS):
+            colors = np.random.choice(COLORS, n_traj)
         else:
-            colors = COLORS[:n_ped]
+            colors = COLORS[:n_traj]
 
-    for ped_id, trajectory, color in zip(ped_ids, trajectories, colors):
+    if labels is None:
+        labels = n_traj * [None]  # no labels
+
+    for label, trajectory, color in zip(labels, trajectories, colors):
         x, y = trajectory[:, 1], trajectory[:, 2]
-        plt.scatter(x / 1000, y / 1000, c=color, s=10, label=ped_id)
+        plt.scatter(x / 1000, y / 1000, c=color, s=10, label=label)
 
     if boundaries:
         plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
         plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
 
-    plt.title(title)
+    if title is not None:
+        plt.title(title)
     plt.xlabel("x (m)")
-    plt.legend()
+
+    if labels is not None:
+        plt.legend()
 
     plt.ylabel("y (m)")
     if show:
@@ -166,7 +171,8 @@ def plot_static_2D_trajectories(
 
 
 def plot_animated_2D_trajectories(
-    pedestrians,
+    trajectories,
+    labels=None,
     simultaneous=False,
     vel=False,
     boundaries=None,
@@ -194,29 +200,19 @@ def plot_animated_2D_trajectories(
     loop: bool, optional
         Whether or not the animation should loop, by default False
     """
-    n_ped = len(pedestrians)
-    ped_ids = [ped.ped_id for ped in pedestrians]
+    n_traj = len(trajectories)
 
     if simultaneous:
-        trajectories = compute_simultaneous_observations(
-            [ped.get_trajectory() for ped in pedestrians]
-        )
-    else:
-        trajectories = get_padded_trajectories(
-            [ped.get_trajectory() for ped in pedestrians]
-        )
+        trajectories = compute_simultaneous_observations(trajectories)
 
     positions = [traj[:, 1:3] / 1000 for traj in trajectories]
     velocities = [traj[:, 5:7] / 1000 for traj in trajectories]
 
-    if title is None:
-        title = f"Trajectories for {'-'.join([str(ped.ped_id) for ped in pedestrians])}"
-
     if not colors:
-        if n_ped > len(COLORS):
-            colors = np.random.choice(COLORS, n_ped)
+        if n_traj > len(COLORS):
+            colors = np.random.choice(COLORS, n_traj)
         else:
-            colors = COLORS[:n_ped]
+            colors = COLORS[:n_traj]
 
     fig, ax = plt.subplots()
 
@@ -233,9 +229,15 @@ def plot_animated_2D_trajectories(
             max([np.nanmax(pos[:, 1]) for pos in positions]),
         )
 
-    def animate(i, ax, ped_ids, positions, velocities, vicinity, colors, title):
+    def animate(i, ax, labels, positions, velocities, vicinity, colors, title):
         ax.clear()
         ax.axis([xmin, xmax, ymin, ymax])
+
+        if labels is None:
+            zip_labels = n_traj * [None]  # no labels
+        else:
+            zip_labels = labels
+
         ax.set_aspect("equal", "box")
         if vicinity:  # set the size of the marker for the vicinity
             M = ax.transData.get_matrix()
@@ -262,16 +264,18 @@ def plot_animated_2D_trajectories(
                     head_width=0.5,
                 )
 
-        for ped_id, position, color in zip(ped_ids, positions, colors):
-            ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=ped_id)
-        ax.set_title(title)
-        ax.legend()
+        for label, position, color in zip(zip_labels, positions, colors):
+            ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=label)
+        if title is not None:
+            ax.set_title(title)
+        if labels is not None:
+            ax.legend()
 
     ani = animation.FuncAnimation(
         fig,
         animate,
         range(len(positions[0][:, 0])),
-        fargs=(ax, ped_ids, positions, velocities, vicinity, colors, title),
+        fargs=(ax, labels, positions, velocities, vicinity, colors, title),
         repeat=loop,
         interval=50,
         blit=False,

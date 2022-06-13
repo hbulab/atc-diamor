@@ -109,9 +109,14 @@ class Group:
         else:
             boundaries = None
 
+        trajectories = [m.get_trajectory() for m in self.members]
+        ped_ids = [m.get_id() for m in self.members]
+
         if animate:
             plot_animated_2D_trajectories(
-                self.members,
+                trajectories,
+                title=f"Trajectory for {self.group_id}",
+                labels=ped_ids,
                 simultaneous=simultaneous,
                 boundaries=boundaries,
                 show=show,
@@ -120,7 +125,9 @@ class Group:
             )
         else:
             plot_static_2D_trajectories(
-                self.members,
+                trajectories,
+                title=f"Trajectory for {self.group_id}",
+                labels=ped_ids,
                 simultaneous=simultaneous,
                 boundaries=boundaries,
                 show=show,
