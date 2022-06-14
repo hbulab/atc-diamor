@@ -57,7 +57,7 @@ class Group:
         members_trajectories = [member.trajectory for member in self.members]
         traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
         traj_G = self.get_center_of_mass_trajectory()
-        return compute_relative_orienation(traj_G, traj_A, traj_B)
+        return compute_relative_orientation(traj_G, traj_A, traj_B)
 
     def get_center_of_mass_trajectory(self):
         members_trajectories = [member.trajectory for member in self.members]

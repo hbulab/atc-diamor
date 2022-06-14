@@ -1,7 +1,7 @@
 import pickle as pk
 
 
-def pickle_load(file_path):
+def pickle_load(file_path: str):
     """Load the content of a pickle file
 
     Parameters
@@ -19,7 +19,7 @@ def pickle_load(file_path):
     return data
 
 
-def pickle_save(file_path, data):
+def pickle_save(file_path: str, data):
     """Save data to pickle file
 
     Parameters

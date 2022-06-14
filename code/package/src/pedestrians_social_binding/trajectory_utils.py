@@ -48,9 +48,13 @@ def have_simultaneous_observations(trajectories):
 
 
 def get_trajectory_at_times(trajectory, times):
+    trajectory_at_times = np.full((len(times), 7), np.nan)
     times_traj = trajectory[:, 0]
-    at_times = np.isin(times_traj, times)
-    return trajectory[at_times]
+    times_in_times_traj = np.isin(times, times_traj)
+    times_traj_in_times = np.isin(times_traj, times)
+    trajectory_at_times[times_in_times_traj] = trajectory[times_traj_in_times]
+
+    return trajectory_at_times
 
 
 def get_trajectories_at_times(trajectories, times):
@@ -257,12 +261,20 @@ def compute_relative_orientation(traj_center_of_mass, traj_A, traj_B):
     pos_A = traj_A[:, 1:3]
     pos_B = traj_B[:, 1:3]
     d_AB = pos_B - pos_A
-    rel_orientation = np.arctan2(d_AB[:, 1], d_AB[:, 0]) - np.arctan2(
+    rel_orientation_AB = np.arctan2(d_AB[:, 1], d_AB[:, 0]) - np.arctan2(
         v_G[:, 1], v_G[:, 0]
     )
-    rel_orientation[rel_orientation > np.pi] -= 2 * np.pi
-    rel_orientation[rel_orientation < -np.pi] += 2 * np.pi
-    return rel_orientation
+    rel_orientation_AB[rel_orientation_AB > np.pi] -= 2 * np.pi
+    rel_orientation_AB[rel_orientation_AB < -np.pi] += 2 * np.pi
+
+    d_BA = pos_A - pos_B
+    rel_orientation_BA = np.arctan2(d_BA[:, 1], d_BA[:, 0]) - np.arctan2(
+        v_G[:, 1], v_G[:, 0]
+    )
+    rel_orientation_BA[rel_orientation_BA > np.pi] -= 2 * np.pi
+    rel_orientation_BA[rel_orientation_BA < -np.pi] += 2 * np.pi
+
+    return np.concatenate((rel_orientation_AB, rel_orientation_BA))
 
 
 def compute_continuous_sub_trajectories(trajectory, max_gap=2000):
