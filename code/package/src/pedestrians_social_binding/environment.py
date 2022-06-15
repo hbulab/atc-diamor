@@ -10,12 +10,24 @@ import os
 class Environment:
     def __init__(self, name, data_dir):
 
-        if name not in ["atc", "diamor"]:
+        if name not in ["atc", "atc:corridor", "diamor"]:
             raise ValueError(f"Unknown environment {name}.")
         self.name = name
-        self.data_dir = os.path.join(data_dir, self.name)
-        self.boundaries = BOUNDARIES_ATC if self.name == "atc" else BOUNDARIES_DIAMOR
-        self.days = DAYS_ATC if self.name == "atc" else DAYS_DIAMOR
+        self.data_dir = os.path.join(data_dir, self.name.split(":")[0])
+        self.boundaries = BOUNDARIES[name]
+        self.days = (
+            DAYS_ATC
+            if self.name == "atc" or self.name == "atc:corridor"
+            else DAYS_DIAMOR
+        )
+
+    def get_boundaries(self):
+        return [
+            self.boundaries["xmin"],
+            self.boundaries["xmax"],
+            self.boundaries["ymin"],
+            self.boundaries["ymax"],
+        ]
 
     def get_pedestrians(
         self, ids=[], thresholds=[], no_groups=False, days=None

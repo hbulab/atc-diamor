@@ -14,6 +14,8 @@ class Pedestrian:
         self.groups = groups
         self.env = env
         self.day = day
+        self.first_obs = trajectory[0, 0] if len(trajectory) else -1
+        self.last_obs = trajectory[-1, 0] if len(trajectory) else -1
 
     def __str__(self):
         return f"Pedestrian({self.ped_id})"
@@ -30,6 +32,12 @@ class Pedestrian:
     def set_trajectory(self, trajectory):
         self.trajectory = trajectory
 
+    def get_first_obs(self):
+        return self.first_obs
+
+    def get_last_obs(self):
+        return self.last_obs
+
     def get_trajectory_column(self, value):
         if value not in TRAJECTORY_COLUMNS:
             raise ValueError(
@@ -40,6 +48,12 @@ class Pedestrian:
     def get_position(self):
         return self.trajectory[:, 1:3]
 
+    def shares_observations_with(self, pedestrian):
+        return not (
+            self.last_obs < pedestrian.get_first_obs()
+            or self.first_obs > pedestrian.get_last_obs()
+        )
+
     def get_encountered_pedestrians(
         self, pedestrians, proximity_threshold=4000, skip=[]
     ):
@@ -49,13 +63,14 @@ class Pedestrian:
                 pedestrian.ped_id == self.ped_id or pedestrian.ped_id in skip
             ):  # don't compare with himself or ped to skip
                 continue
-            if not have_simultaneous_observations(
-                [self.trajectory, pedestrian.get_trajectory()]
-            ):
+            if not self.shares_observations_with(pedestrian):
                 continue
             sim_traj, sim_traj_ped = compute_simultaneous_observations(
                 [self.trajectory, pedestrian.get_trajectory()]
             )
+            if len(sim_traj) == 0 or len(sim_traj_ped) == 0:
+                continue
+
             if proximity_threshold is not None and (
                 min(compute_interpersonal_distance(sim_traj, sim_traj_ped))
                 > proximity_threshold
@@ -106,7 +121,7 @@ class Pedestrian:
                 pedestrian.ped_id == self.ped_id or pedestrian.ped_id in skip
             ):  # don't compare with members or ped to skip
                 continue
-            if not have_simultaneous_observations([traj, pedestrian.get_trajectory()]):
+            if not self.shares_observations_with(pedestrian):
                 continue
             sim_traj_group, sim_traj_ped = compute_simultaneous_observations(
                 [traj, pedestrian.get_trajectory()]

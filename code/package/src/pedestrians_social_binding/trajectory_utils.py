@@ -1,5 +1,4 @@
 from __future__ import annotations
-from statistics import mean
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
@@ -15,7 +14,7 @@ import numpy as np
 from scipy.spatial import distance
 
 
-def compute_simultaneous_observations(trajectories):
+def compute_simultaneous_observations(trajectories: list[np.ndarray]) -> list:
     """Find the section of the trajectories that correspond to simultaneous observations
 
     Parameters
@@ -43,11 +42,37 @@ def compute_simultaneous_observations(trajectories):
     return simult_trajectories
 
 
-def have_simultaneous_observations(trajectories):
+def have_simultaneous_observations(trajectories: list[np.ndarray]) -> bool:
+    """Check if a list of trajectories have some observations at same time stamps
+
+    Parameters
+    ----------
+    trajectories : list
+        The list of trajectories
+
+    Returns
+    -------
+    bool
+        True if the list of trajectories have at least one identical time stamps, False otherwise
+    """
     return len(compute_simultaneous_observations(trajectories)[0]) > 0
 
 
-def get_trajectory_at_times(trajectory, times):
+def get_trajectory_at_times(trajectory: np.ndarray, times: np.ndarray) -> np.ndarray:
+    """Get the observation from the trajectory, at the given times
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    times : np.ndarray
+        An array of time stamps
+
+    Returns
+    -------
+    np.ndarray
+        Observations from the trajectory at the given time stamps
+    """
     trajectory_at_times = np.full((len(times), 7), np.nan)
     times_traj = trajectory[:, 0]
     times_in_times_traj = np.isin(times, times_traj)
@@ -57,7 +82,23 @@ def get_trajectory_at_times(trajectory, times):
     return trajectory_at_times
 
 
-def get_trajectories_at_times(trajectories, times):
+def get_trajectories_at_times(
+    trajectories: list[np.ndarray], times: np.ndarray
+) -> list[np.ndarray]:
+    """Get the observations at the given times for all trajectories
+
+    Parameters
+    ----------
+    trajectories : list[np.ndarray]
+        A list of trajectories
+    times : np.ndarray
+        An array of time stamps
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of trajectories with only the observations at the given time stamps
+    """
     trajectories_at_time = []
     for trajectory in trajectories:
         trajectories_at_time += [get_trajectory_at_times(trajectory, times)]
@@ -65,13 +106,45 @@ def get_trajectories_at_times(trajectories, times):
     return trajectories_at_time
 
 
-def get_trajectory_not_at_times(trajectory, times):
+def get_trajectory_not_at_times(
+    trajectory: np.ndarray, times: np.ndarray
+) -> np.ndarray:
+    """Returns observations from the trajectory that are not at the given time stamps
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    times : np.ndarray
+        An array of time stamps
+
+    Returns
+    -------
+    np.ndarray
+        All observations from the trajectory that are at the given time stamps
+    """
     times_traj = trajectory[:, 0]
     at_times = np.isin(times_traj, times)
     return trajectory[np.logical_not(at_times)]
 
 
-def get_trajectories_not_at_times(trajectories, times):
+def get_trajectories_not_at_times(
+    trajectories: list[np.ndarray], times: np.ndarray
+) -> list[np.ndarray]:
+    """Get the observations not at the given times for all trajectories
+
+    Parameters
+    ----------
+    trajectories : list[np.ndarray]
+        A list of trajectories
+    times : np.ndarray
+        An array of time stamps
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of trajectories with only the observations not at the given time stamps
+    """
     trajectories_not_at_time = []
     for trajectory in trajectories:
         trajectories_not_at_time += [get_trajectory_not_at_times(trajectory, times)]
@@ -79,7 +152,20 @@ def get_trajectories_not_at_times(trajectories, times):
     return trajectories_not_at_time
 
 
-def get_padded_trajectories(trajectories, extend=True):
+def get_padded_trajectories(trajectories: list[np.ndarray]) -> list[np.ndarray]:
+    """Get trajectories padded with NaN values, so that each trajectory has
+    observations for timestamps in all trajectories
+
+    Parameters
+    ----------
+    trajectories : list[np.ndarray]
+        A list of trajectories
+
+    Returns
+    -------
+    list[np.ndarray]
+        List of padded trajectories
+    """
     all_times = trajectories[0][:, 0]
     for trajectory in trajectories[1:]:
         all_times = np.union1d(all_times, trajectory[:, 0])
@@ -93,19 +179,21 @@ def get_padded_trajectories(trajectories, extend=True):
     return padded_trajectories
 
 
-def compute_interpersonal_distance(trajectory_A, trajectory_B):
+def compute_interpersonal_distance(
+    trajectory_A: np.ndarray, trajectory_B: np.ndarray
+) -> np.ndarray:
     """Compute the pair-wise distances between two trajectories
 
     Parameters
     ----------
-    trajectory_A : ndarray
+    trajectory_A : np.ndarray
         A trajectory
-    trajectory_B : ndarray
+    trajectory_B : np.ndarray
         A trajectory
 
     Returns
     -------
-    ndarray
+    np.ndarray
         1D array containing the pair-wise distances
     """
 
@@ -120,7 +208,25 @@ def compute_interpersonal_distance(trajectory_A, trajectory_B):
     return d
 
 
-def compute_relative_direction(trajectory_A, trajectory_B):
+def compute_relative_direction(
+    trajectory_A: np.ndarray, trajectory_B: np.ndarray
+) -> str:
+    """Compute the relative direction between two trajectories. First, compute
+    the instantaneous relative direction at all time stamps based on the dot product between
+    the velocities. Then, aggregates the results if a direction is predominant.
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    str
+        The value of the relative direction ("cross", "opposite", "same")
+    """
     sim_traj_A, sim_traj_B = compute_simultaneous_observations(
         [trajectory_A, trajectory_B]
     )
@@ -158,7 +264,22 @@ def compute_relative_direction(trajectory_A, trajectory_B):
         return None
 
 
-def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold):
+def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestrian:
+    """Filter the trajectory of a pedestrian based on a threshold
+
+    Parameters
+    ----------
+    pedestrian : Pedestrian
+        A pedestrian object
+    threshold : Threshold
+        A threshold object
+
+    Returns
+    -------
+    Pedestrian
+        The pedestrian with thresholded trajectory. If the pedestrians needs to be discarded,
+        None is returned.
+    """
     value = threshold.get_value()
     min_val = threshold.get_min_value()
     max_val = threshold.get_max_value()
@@ -213,8 +334,25 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold):
         return None
 
 
-def filter_pedestrians(pedestrians: list[Pedestrian], threshold: Threshold):
+def filter_pedestrians(
+    pedestrians: list[Pedestrian], threshold: Threshold
+) -> list[Pedestrian]:
+    """Filters pedestrians given a threshold.
 
+    Parameters
+    ----------
+    pedestrians : list[Pedestrian]
+        A list of pedestrians objects
+    threshold : Threshold
+        A threshold object
+
+    Returns
+    -------
+    list[Pedestrian]
+        A list of pedestrians whose trajectories have been thresholded. Some pedestrians
+        might be discarded and the length of the returned list will be smaller than the length
+        of the input pedestrians.
+    """
     filtered_pedestrians = []
     for pedestrian in pedestrians:
         pedestrian = filter_pedestrian(pedestrian, threshold)
@@ -224,7 +362,21 @@ def filter_pedestrians(pedestrians: list[Pedestrian], threshold: Threshold):
     return filtered_pedestrians
 
 
-def filter_group(group: Group, threshold: Threshold):
+def filter_group(group: Group, threshold: Threshold) -> bool:
+    """Decides if a group needs to be discarded based on a threshold
+
+    Parameters
+    ----------
+    group : Group
+        A group object
+    threshold : Threshold
+        A threshold object
+
+    Returns
+    -------
+    bool
+        True if the group satisfies the threshold, False otherwise.
+    """
     value = threshold.get_value()
     min_val = threshold.get_min_value()
     max_val = threshold.get_max_value()
@@ -241,22 +393,132 @@ def filter_group(group: Group, threshold: Threshold):
         return np.all(condition)
 
 
-def translate_position(position, translation):
+def translate_position(position: np.ndarray, translation: np.ndarray) -> np.ndarray:
+    """Translate a position by a given 2D vector
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    translation : np.ndarray
+        A 2D translation vector
+
+    Returns
+    -------
+    np.ndarray
+        The translated position
+    """
     return position + translation
 
 
-def rotate_position(position, angle):
+def rotate_position(position: np.ndarray, angle: float) -> np.ndarray:
+    """Rotate a position by a given angle, around the origin (0, 0)
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    angle : float
+        An angle
+
+    Returns
+    -------
+    np.ndarray
+        The rotated position
+    """
     r_mat = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
     r_position = np.dot(r_mat, position.T).T
     return r_position
 
 
-def compute_interpersonal_distance(pos_A, pos_B):
+def compute_interpersonal_distance(pos_A: np.ndarray, pos_B: np.ndarray) -> np.ndarray:
+    """Compute the distance between two position, at each time stamp. Assumes that the
+    values of position are for corresponding time stamps.
+
+    Parameters
+    ----------
+    pos_A : np.ndarray
+        A position
+    pos_B : np.ndarray
+        A position
+
+    Returns
+    -------
+    np.ndarray
+        The array of distance at all time stamps
+    """
     dist_AB = np.linalg.norm(pos_A - pos_B, axis=1)
     return dist_AB
 
 
-def compute_relative_orientation(traj_center_of_mass, traj_A, traj_B):
+def compute_center_of_mass(trajectories: list[np.ndarray]) -> np.ndarray:
+    """Computes the center of mass of a list of trajectories. Position and velocities are
+    the average of all trajectories.
+
+    Parameters
+    ----------
+    trajectories : list[np.ndarray]
+        A list of trajectories
+
+    Returns
+    -------
+    np.ndarray
+        The trajectory of the center of mass
+    """
+    simultaneous_traj = compute_simultaneous_observations(trajectories)
+    n_traj = len(trajectories)
+
+    simultaneous_time = simultaneous_traj[0][:, 0]
+    x_members = np.stack([traj[:, 1] for traj in simultaneous_traj], axis=1)
+    y_members = np.stack([traj[:, 2] for traj in simultaneous_traj], axis=1)
+    z_members = np.stack([traj[:, 3] for traj in simultaneous_traj], axis=1)
+
+    vx_members = np.stack([traj[:, 5] for traj in simultaneous_traj], axis=1)
+    vy_members = np.stack([traj[:, 6] for traj in simultaneous_traj], axis=1)
+
+    x_center_of_mass = np.sum(x_members, axis=1) / n_traj
+    y_center_of_mass = np.sum(y_members, axis=1) / n_traj
+    z_center_of_mass = np.sum(z_members, axis=1) / n_traj
+
+    vx_center_of_mass = np.sum(vx_members, axis=1) / n_traj
+    vy_center_of_mass = np.sum(vy_members, axis=1) / n_traj
+
+    v_center_of_mass = (vx_center_of_mass**2 + vx_center_of_mass**2) ** 0.5
+
+    trajectory = np.stack(
+        (
+            simultaneous_time,
+            x_center_of_mass,
+            y_center_of_mass,
+            z_center_of_mass,
+            v_center_of_mass,
+            vx_center_of_mass,
+            vy_center_of_mass,
+        ),
+        axis=1,
+    )
+    return trajectory
+
+
+def compute_relative_orientation(traj_A: np.ndarray, traj_B: np.ndarray) -> np.ndarray:
+    """Computes the relative orientation of members of a group given trajectories of the members.
+
+    Parameters
+    ----------
+    traj_A : np.ndarray
+        Trajectory of one member of the group
+    traj_B : np.ndarray
+        Trajectory of ont member of the group
+
+    Returns
+    -------
+    np.ndarray
+        The array of relative orientation (angles) of the group.
+    """
+    traj_center_of_mass = compute_center_of_mass([traj_A, traj_B])
+    [traj_center_of_mass, traj_A, traj_B] = compute_simultaneous_observations(
+        [traj_center_of_mass, traj_A, traj_B]
+    )
     v_G = traj_center_of_mass[:, 5:7]
     pos_A = traj_A[:, 1:3]
     pos_B = traj_B[:, 1:3]
@@ -277,7 +539,24 @@ def compute_relative_orientation(traj_center_of_mass, traj_A, traj_B):
     return np.concatenate((rel_orientation_AB, rel_orientation_BA))
 
 
-def compute_continuous_sub_trajectories(trajectory, max_gap=2000):
+def compute_continuous_sub_trajectories(
+    trajectory: np.ndarray, max_gap: int = 2000
+) -> list[np.ndarray]:
+    """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
+    gaps of max_gap
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    max_gap : int, optional
+        The maximum temporal gap allowed in a trajectory, by default 2000
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
+    """
 
     t = trajectory[:, 0]
     delta_t = t[1:] - t[:-1]
@@ -295,7 +574,26 @@ def compute_continuous_sub_trajectories(trajectory, max_gap=2000):
     return sub_trajectories
 
 
-def compute_maximum_lateral_deviation(position, scaled=True):
+def compute_maximum_lateral_deviation(
+    position: np.ndarray, scaled: bool = True
+) -> float:
+    """Computes the maximum lateral deviation over the trajectory (the maximum distance from
+    points of the trajectories to the line joining the first and last point of the trajectory).
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    scaled : bool, optional
+        Whether or not the value is scaled by the distance between the first
+        and last point of the trajectory, by default True
+
+    Returns
+    -------
+    float
+        The value for the maximum lateral deviation (or for the scaled maximum lateral deviation)
+    """
+
     start_point = position[0]
     end_point = position[-1]
     middle_points = position[1:-1]
@@ -313,7 +611,22 @@ def compute_maximum_lateral_deviation(position, scaled=True):
     return max_distance
 
 
-def compute_straightness_index(position):
+def compute_straightness_index(position: np.ndarray) -> float:
+    """Computes the straightness index of a trajectory. The straightness index
+    is defined as the D/L where D is the net displacement of the trajectory (the
+    distance between the first and last point) and L is the gross displacement (the
+    sum of the distance between each consecutive points of the trajectory)
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+
+    Returns
+    -------
+    float
+        The value for the straightness index
+    """
     start_point = position[0]
     end_point = position[-1]
     net_dislacement = np.linalg.norm(end_point - start_point)
@@ -322,7 +635,19 @@ def compute_straightness_index(position):
     return net_dislacement / gross_displacement
 
 
-def compute_turning_angles(position):
+def compute_turning_angles(position: np.ndarray) -> np.ndarray:
+    """Computes the turning angles of a trajectory
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+
+    Returns
+    -------
+    np.ndarray
+        The array of turning angles along the trajectory
+    """
     step_vectors = position[1:, :] - position[:-1, :]
     turning_angles = np.arctan2(step_vectors[1:, 0], step_vectors[1:, 1]) - np.arctan2(
         step_vectors[:-1, 0], step_vectors[:-1, 1]
@@ -333,7 +658,19 @@ def compute_turning_angles(position):
     return turning_angles
 
 
-def rediscretize_position(position):
+def rediscretize_position(position: np.ndarray) -> np.ndarray:
+    """Transforms the trajectory so that the distance between each point is fixed
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+
+    Returns
+    -------
+    np.ndarray
+        The position with a constant step size
+    """
     step_sizes = np.linalg.norm(position[:-1] - position[1:], axis=1)
     n_points = len(position)
     q = np.min(step_sizes)
@@ -369,7 +706,21 @@ def rediscretize_position(position):
     return np.array(rediscretized_position)
 
 
-def compute_sinuosity(position):
+def compute_sinuosity(position: np.ndarray) -> float:
+    """Computes the sinuosity of the trajectory. Sinuosity is defined as 1.18 * s/q where
+    s is the standard deviation of the turning angles of the trajectory and q is the step size
+    of the trajectory
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A positon
+
+    Returns
+    -------
+    float
+        The value for the sinuosity
+    """
     rediscretized_position = rediscretize_position(position)
     step_size = np.linalg.norm(rediscretized_position[1] - rediscretized_position[0])
     turning_angles = compute_turning_angles(rediscretized_position)
@@ -377,7 +728,24 @@ def compute_sinuosity(position):
     return sinuosity
 
 
-def compute_deflection(position, measure="straightness_index"):
+def compute_deflection(
+    position: np.ndarray, measure: str = "straightness_index"
+) -> float:
+    """Computes the deflection on the trajectory given a deflection measure
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    measure : str, optional
+        The deflection measure to be user, by default "straightness_index", one of "straightness_index",
+        "maximum_scaled_lateral_deviation", "maximum_lateral_deviation", "sinuosity"
+
+    Returns
+    -------
+    float
+        The deflection value
+    """
     if measure == "straightness_index":
         return compute_straightness_index(position)
     elif measure == "maximum_scaled_lateral_deviation":
@@ -388,7 +756,28 @@ def compute_deflection(position, measure="straightness_index"):
         return compute_sinuosity(position)
 
 
-def get_pieces(position, piece_size, overlap=False, delta=100):
+def get_pieces(
+    position: np.ndarray, piece_size: int, overlap: bool = False, delta: int = 100
+) -> list[np.ndarray]:
+    """Breaks up a trajectory in to pieces of given length
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    piece_size : int
+        The length of the pieces
+    overlap : bool, optional
+        Whether or not overlapping pieces should be returned, by default False
+    delta : int, optional
+        The maximum difference allowed between the length of the pieces
+        requested and the pieces returned, by default 100
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
     start = position[0]
     end = position[1]
 
@@ -410,9 +799,34 @@ def get_pieces(position, piece_size, overlap=False, delta=100):
 
 
 def compute_piecewise_deflections(
-    position, piece_size, delta=100, measure="straightness_index"
-):
-    pieces = get_pieces(position, piece_size, delta=delta)
+    position: np.ndarray,
+    piece_size: int,
+    overlap: bool = False,
+    delta: int = 100,
+    measure: str = "straightness_index",
+) -> list[float]:
+    """Compute the deflection using the given method on all pieces of the given length.
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    piece_size : int
+        The length of the pieces
+    overlap : bool, optional
+        Whether or not overlapping pieces should be returned, by default False
+    delta : int, optional
+        The maximum difference allowed between the length of the pieces
+        requested and the pieces returned, by default 100
+    measure : str, optional
+        The deflection measure to be used, by default "straightness_index"
+
+    Returns
+    -------
+    list[float]
+        The deflection values for all pieces
+    """
+    pieces = get_pieces(position, piece_size=piece_size, overlap=overlap, delta=delta)
     deflections = [
         compute_deflection(piece, measure=measure)
         for piece in pieces

@@ -6,15 +6,21 @@ from pedestrians_social_binding.constants import *
 
 
 def plot_static_2D_trajectory(
-    trajectory, title=None, boundaries=None, show=True, save_path=None
+    trajectory: np.ndarray,
+    title: str = None,
+    boundaries: dict = None,
+    show: bool = True,
+    save_path: str = None,
 ):
     """Plot the trajectory of a pedestrian, as an image
 
     Parameters
     ----------
-    pedestrian : obj
+    pedestrian : np.ndarray
         A pedestrian
-    boundaries : obj, optional
+    title: str
+        A title for the animation, by default None
+    boundaries : dict, optional
         The boundaries of the environment to be use as axis limits, by default None
     show : bool, optional
         Whether or not the image should be displayed, by default True
@@ -39,21 +45,28 @@ def plot_static_2D_trajectory(
 
 
 def plot_animated_2D_trajectory(
-    trajectory, title=None, boundaries=None, show=True, save_path=None, loop=False
+    trajectory: np.ndarray,
+    title: str = None,
+    boundaries: dict = None,
+    show: bool = True,
+    save_path: str = None,
+    loop: bool = False,
 ):
     """Plot the trajectory of a pedestrian, as an animation
 
     Parameters
     ----------
-    pedestrian : obj
-        A pedestrian
-    boundaries : obj, optional
+    trajectory : np.ndarray
+        A trajectory
+    title : str, optional
+        A title for the animation, by default None
+    boundaries : dict, optional
         The boundaries of the environment to be use as axis limits, by default None
     show : bool, optional
         Whether or not the animation should be displayed, by default True
     save_path : str, optional
         The path to the file where the animation will be saved, by default None
-    loop: bool, optional
+    loop : bool, optional
         Whether or not the animation should loop, by default False
     """
     x, y = trajectory[:, 1], trajectory[:, 2]
@@ -105,33 +118,35 @@ def plot_animated_2D_trajectory(
 
 
 def plot_static_2D_trajectories(
-    trajectories,
-    labels=None,
-    simultaneous=False,
-    boundaries=None,
-    colors=None,
-    title=None,
-    show=True,
-    save_path=None,
+    trajectories: list[np.ndarray],
+    labels: list[str] = None,
+    simultaneous: bool = False,
+    boundaries: dict = None,
+    colors: list[str] = None,
+    title: str = None,
+    show: bool = True,
+    save_path: str = None,
 ):
     """Plot the trajectories of a set of pedestrians
 
     Parameters
     ----------
-    trajectories : list
+    trajectories : list[np.ndarray]
         A list of trajectories
+    labels : list[str], optional
+        A list of labels, by default None
     simultaneous : bool, optional
         Whether or not the trajectories should be cropped to the simultaneous observations, by default False
-    boundaries : obj, optional
+    boundaries : dict, optional
         The boundaries of the environment to be used as axis limits, by default None
-    colors : list, optional
+    colors : list[str], optional
         A list of colors to be used, by default None
     title : str, optional
         The title of the figure, by default None
     show : bool, optional
         Whether or not the image should be displayed, by default True
     save_path : str, optional
-        The path to the file where the image will be saved, by default None
+         The path to the file where the image will be saved, by default None
     """
     n_traj = len(trajectories)
 
@@ -171,33 +186,43 @@ def plot_static_2D_trajectories(
 
 
 def plot_animated_2D_trajectories(
-    trajectories,
-    labels=None,
-    simultaneous=False,
-    vel=False,
-    boundaries=None,
-    vicinity=None,
-    colors=None,
-    title=None,
-    show=True,
-    save_path=None,
-    loop=False,
+    trajectories: list[np.ndarray],
+    labels: list[str] = None,
+    simultaneous: bool = False,
+    vel: bool = False,
+    boundaries: dict = None,
+    vicinity: float = None,
+    colors: list[str] = None,
+    title: str = None,
+    show: bool = True,
+    save_path: str = None,
+    loop: bool = False,
 ):
     """Plot the trajectory of a set of pedestrians, as an animation
 
     Parameters
     ----------
-    pedestrians : list
-        A list of pedestrians
+    trajectories : list[np.ndarray]
+        A list of trajectories
+    labels : list[str], optional
+         A list of labels, by default None
     simultaneous : bool, optional
         Whether or not the trajectories should be cropped to the simultaneous observations, by default False
-    boundaries : obj, optional
+    vel : bool, optional
+        Whether or not the velocities should be displayed as arrows, by default False
+    boundaries : dict, optional
         The boundaries of the environment to be use as axis limits, by default None
+    vicinity : float, optional
+        A vicinity to be drawn, by default None
+    colors : list[str], optional
+        A list of colors to use for the trajectories, by default None
+    title : str, optional
+        A title for the animation, by default None
     show : bool, optional
         Whether or not the animation should be displayed, by default True
     save_path : str, optional
         The path to the file where the animation will be saved, by default None
-    loop: bool, optional
+    loop : bool, optional
         Whether or not the animation should loop, by default False
     """
     n_traj = len(trajectories)

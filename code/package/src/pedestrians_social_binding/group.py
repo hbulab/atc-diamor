@@ -56,43 +56,11 @@ class Group:
             )
         members_trajectories = [member.trajectory for member in self.members]
         traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
-        traj_G = self.get_center_of_mass_trajectory()
-        return compute_relative_orientation(traj_G, traj_A, traj_B)
+        return compute_relative_orientation(traj_A, traj_B)
 
     def get_center_of_mass_trajectory(self):
         members_trajectories = [member.trajectory for member in self.members]
-        simultaneous_traj = compute_simultaneous_observations(members_trajectories)
-
-        simultaneous_time = simultaneous_traj[0][:, 0]
-        x_members = np.stack([traj[:, 1] for traj in simultaneous_traj], axis=1)
-        y_members = np.stack([traj[:, 2] for traj in simultaneous_traj], axis=1)
-        z_members = np.stack([traj[:, 3] for traj in simultaneous_traj], axis=1)
-
-        vx_members = np.stack([traj[:, 5] for traj in simultaneous_traj], axis=1)
-        vy_members = np.stack([traj[:, 6] for traj in simultaneous_traj], axis=1)
-
-        x_center_of_mass = np.sum(x_members, axis=1) / self.size
-        y_center_of_mass = np.sum(y_members, axis=1) / self.size
-        z_center_of_mass = np.sum(z_members, axis=1) / self.size
-
-        vx_center_of_mass = np.sum(vx_members, axis=1) / self.size
-        vy_center_of_mass = np.sum(vy_members, axis=1) / self.size
-
-        v_center_of_mass = (vx_center_of_mass**2 + vx_center_of_mass**2) ** 0.5
-
-        trajectory = np.stack(
-            (
-                simultaneous_time,
-                x_center_of_mass,
-                y_center_of_mass,
-                z_center_of_mass,
-                v_center_of_mass,
-                vx_center_of_mass,
-                vy_center_of_mass,
-            ),
-            axis=1,
-        )
-        return trajectory
+        return compute_center_of_mass(members_trajectories)
 
     def plot_2D_trajectory(
         self,
