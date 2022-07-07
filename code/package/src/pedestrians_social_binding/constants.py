@@ -1,15 +1,21 @@
 # ---------- ATC constants ----------
 DAYS_ATC = ["0109", "0217", "0424", "0505", "0508"]
 SOCIAL_RELATIONS_JP = ["idontknow", "koibito", "doryo", "kazoku", "yuujin"]
-SOCIAL_RELATIONS_EN = ["idontknow", "couples", "colleagues", "family", "friends"]
+SOCIAL_RELATIONS_EN = ["idontknow", "Couples", "Colleagues", "Families", "Friends"]
 BOUNDARIES_ATC = {"xmin": -41000, "xmax": 49000, "ymin": -27500, "ymax": 24000}
 BOUNDARIES_ATC_CORRIDOR = {"xmin": 5000, "xmax": 48000, "ymin": -27000, "ymax": 8000}
 
 
 # ---------- DIAMOR constants ----------
 DAYS_DIAMOR = ["06", "08"]
-BOUNDARIES_DIAMOR = {"xmin": -200, "xmax": 60300, "ymin": -5300, "ymax": 12000}
 INTENSITIES_OF_INTERACTION_NUM = ["0", "1", "2", "3"]
+BOUNDARIES_DIAMOR = {"xmin": -200, "xmax": 60300, "ymin": -5300, "ymax": 12000}
+BOUNDARIES_DIAMOR_CORRIDOR = {
+    "xmin": 20000,
+    "xmax": 60300,
+    "ymin": -5300,
+    "ymax": 12000,
+}
 
 
 # ---------- other constants ----------
@@ -17,6 +23,7 @@ BOUNDARIES = {
     "atc": BOUNDARIES_ATC,
     "atc:corridor": BOUNDARIES_ATC_CORRIDOR,
     "diamor": BOUNDARIES_DIAMOR,
+    "diamor:corridor": BOUNDARIES_DIAMOR_CORRIDOR,
 }
 
 COLORS = [
@@ -39,7 +46,7 @@ TRAJECTORY_COLUMNS = {
     "v_y": 6,
 }
 
-THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d", "delta"]
+THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d", "delta", "theta"]
 
 REL_DIRS = ["opposite", "same", "cross"]
 

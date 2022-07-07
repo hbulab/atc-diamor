@@ -9,9 +9,9 @@ if TYPE_CHECKING:  # Only imports the below statements during type checking
 from pedestrians_social_binding.constants import *
 from pedestrians_social_binding.parameters import *
 
-
 import numpy as np
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
 
 
 def compute_simultaneous_observations(trajectories: list[np.ndarray]) -> list:
@@ -301,7 +301,7 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
         else:
             return None
 
-    if value == "t":  # threshold on the tome
+    elif value == "t":  # threshold on the time
         time = pedestrian.get_column("t")
         t_obs = time[-1] - time[0]
         if (
@@ -318,20 +318,49 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
         else:
             return None
 
-    column = pedestrian.get_trajectory_column(value)
-    if min_val is not None and max_val is not None:
-        threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
-    elif min_val is not None:
-        threshold_indices = np.where(column >= min_val)[0]
-    else:
-        threshold_indices = np.where(column <= max_val)[0]
+    # elif value == "theta":  # threshold on turning angles
+    #     position = pedestrian.get_position()
+    #     turning_angles = np.abs(compute_turning_angles(position))
+    #     if min_val is not None and max_val is not None:
+    #         bad_points_indices = (
+    #             np.where((turning_angles < min_val) | (turning_angles > max_val))[0] + 1
+    #         )
+    #     elif min_val is not None:
+    #         bad_points_indices = np.where(turning_angles < min_val)[0] + 1
+    #     else:
+    #         bad_points_indices = np.where(turning_angles > max_val)[0] + 1
+    #     # cut around the points
+    #     for i in range(-5, 6):
+    #         bad_points_indices = np.union1d(bad_points_indices, bad_points_indices + i)
+    #     bad_points_indices = bad_points_indices[bad_points_indices < len(position)]
+    #     bad_points_indices = bad_points_indices[bad_points_indices > 0]
 
-    if len(threshold_indices) > 0:
-        trajectory = pedestrian.get_trajectory()[threshold_indices, :]
-        pedestrian.set_trajectory(trajectory)
-        return pedestrian
+    #     threshold_indices = np.setdiff1d(range(len(position)), bad_points_indices)
+    #     # print(threshold_indices)
+
     else:
-        return None
+        column = pedestrian.get_trajectory_column(value)
+        mean_value = np.nanmean(column)
+        if min_val is not None and max_val is not None:
+            # threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
+            keep = mean_value >= min_val and mean_value <= max_val
+        elif min_val is not None:
+            # threshold_indices = np.where(column >= min_val)[0]
+            keep = mean_value >= min_val
+        else:
+            # threshold_indices = np.where(column <= max_val)[0]
+            keep = mean_value <= max_val
+        if keep:
+            return pedestrian
+        else:
+            return None
+
+    # if len(threshold_indices) > 0:
+    #     trajectory = pedestrian.get_trajectory()[threshold_indices, :]
+    #     pedestrian.set_trajectory(trajectory)
+    #     return pedestrian
+    # else:
+    #     return None
 
 
 def filter_pedestrians(
@@ -385,7 +414,7 @@ def filter_group(group: Group, threshold: Threshold) -> bool:
         d_AB = group.get_interpersonal_distance()
 
         if min_val is not None and max_val is not None:
-            condition = d_AB >= min_val and d_AB <= max_val
+            condition = np.logical_and(d_AB >= min_val, d_AB <= max_val)
         elif min_val is not None:
             condition = d_AB >= min_val
         else:
@@ -558,7 +587,9 @@ def compute_continuous_sub_trajectories(
         The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
     """
 
-    t = trajectory[:, 0]
+    not_nan_indices = np.where(np.logical_not(np.isnan(trajectory[:, 1])))[0]
+    trajectory_not_nan = trajectory[not_nan_indices, :]
+    t = trajectory_not_nan[:, 0]
     delta_t = t[1:] - t[:-1]
 
     jumps_indices = np.where(delta_t > max_gap)[0]
@@ -566,10 +597,10 @@ def compute_continuous_sub_trajectories(
     sub_trajectories = []
     s = 0
     for j in jumps_indices:
-        sub_trajectories += [trajectory[s : j + 1, :]]
+        sub_trajectories += [trajectory_not_nan[s : j + 1, :]]
         s = j + 1
     if s < len(t):
-        sub_trajectories += [trajectory[s:, :]]
+        sub_trajectories += [trajectory_not_nan[s:, :]]
 
     return sub_trajectories
 
@@ -611,6 +642,44 @@ def compute_maximum_lateral_deviation(
     return max_distance
 
 
+def compute_net_displacement(position: np.ndarray) -> float:
+    """Computes the net displacement of the trajectory (the
+    distance between the first and last point)
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+
+    Returns
+    -------
+    float
+        The value for the net displacement
+    """
+    start_point = position[0]
+    end_point = position[-1]
+    net_displacement = np.linalg.norm(end_point - start_point)
+    return net_displacement
+
+
+def compute_gross_displacement(position: np.ndarray) -> float:
+    """Computes the gross displacement (the
+    sum of the distance between each consecutive points of the trajectory)
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+
+    Returns
+    -------
+    float
+        The value for the gross displacement
+    """
+    gross_displacement = np.sum(np.linalg.norm(position[:-1] - position[1:], axis=1))
+    return gross_displacement
+
+
 def compute_straightness_index(position: np.ndarray) -> float:
     """Computes the straightness index of a trajectory. The straightness index
     is defined as the D/L where D is the net displacement of the trajectory (the
@@ -627,12 +696,9 @@ def compute_straightness_index(position: np.ndarray) -> float:
     float
         The value for the straightness index
     """
-    start_point = position[0]
-    end_point = position[-1]
-    net_dislacement = np.linalg.norm(end_point - start_point)
-    gross_displacement = np.sum(np.linalg.norm(position[:-1] - position[1:], axis=1))
-    # print(trajectory_length)
-    return net_dislacement / gross_displacement
+    net_displacement = compute_net_displacement(position)
+    gross_displacement = compute_gross_displacement(position)
+    return net_displacement / gross_displacement
 
 
 def compute_turning_angles(position: np.ndarray) -> np.ndarray:
@@ -678,6 +744,7 @@ def rediscretize_position(position: np.ndarray) -> np.ndarray:
     current_point = position[0]
     current_goal = position[current_goal_index]
     rediscretized_position = [current_point]
+    # print(q)
     while True:
         d_point_goal = np.linalg.norm(current_goal - current_point)
         if d_point_goal > q:  # there is space until the next trajectory point
@@ -728,6 +795,33 @@ def compute_sinuosity(position: np.ndarray) -> float:
     return sinuosity
 
 
+def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> float:
+    start_point = position[0]
+    end_point = position[-1]
+    # for all points, compute the distance between the line
+    # from start S to end E and the point P
+    # i.e. (SE x PE) / ||PE||
+    distances_to_straight_line = np.abs(
+        np.cross(end_point - start_point, position - start_point)
+    ) / np.linalg.norm(end_point - start_point)
+    # compte the integral using the trapezoid
+    # compute the projection of the trajectory points onto the straight line
+    # get the bases of the trapezoid
+    distances_to_first_point = distance.cdist([start_point], position)[0]
+    cumul_bases = (
+        distances_to_first_point**2 - distances_to_straight_line**2
+    ) ** 0.5
+    bases = cumul_bases[1:] - cumul_bases[:-1]
+
+    areas = (
+        bases * (distances_to_straight_line[:-1] + distances_to_straight_line[1:]) / 2
+    )
+    area_under_the_curve = np.sum(areas)
+    if scaled:  # divide by the distance from P to E squared
+        area_under_the_curve /= np.linalg.norm(end_point - start_point) ** 2
+    return area_under_the_curve
+
+
 def compute_deflection(
     position: np.ndarray, measure: str = "straightness_index"
 ) -> float:
@@ -739,7 +833,7 @@ def compute_deflection(
         A position
     measure : str, optional
         The deflection measure to be user, by default "straightness_index", one of "straightness_index",
-        "maximum_scaled_lateral_deviation", "maximum_lateral_deviation", "sinuosity"
+        "maximum_scaled_lateral_deviation", "maximum_lateral_deviation", "sinuosity", "area_under_curve"
 
     Returns
     -------
@@ -754,6 +848,10 @@ def compute_deflection(
         return compute_maximum_lateral_deviation(position, scaled=False)
     elif measure == "sinuosity":
         return compute_sinuosity(position)
+    elif measure == "area_under_curve":
+        return compute_area_under_the_curve(position)
+    elif measure == "scaled_area_under_curve":
+        return compute_area_under_the_curve(position, scaled=True)
 
 
 def get_pieces(
@@ -798,6 +896,61 @@ def get_pieces(
     return pieces
 
 
+def get_random_pieces(position: np.ndarray, n_pieces=20) -> list[np.ndarray]:
+    """Extract random pieces from a trajectory
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    n_pieces : int
+        Number of pieces for which the deflection will be computed, by default 20
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
+    n_points = len(position)
+    pieces = []
+    while len(pieces) < n_pieces:
+        i1 = np.random.randint(0, n_points - 1)
+        i2 = np.random.randint(0, n_points - 1)
+        if i1 == i2:
+            continue
+        min_i = min(i1, i2)
+        max_i = max(i1, i2)
+        pieces += [position[min_i:max_i, :]]
+    return pieces
+
+
+def get_random_pieces_normal_distribution(
+    position: np.ndarray, n_pieces=20, mu=6, sigma=0.6
+) -> list[np.ndarray]:
+    """Extract random pieces from a trajectory
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    n_pieces : int
+        Number of pieces for which the deflection will be computed, by default 20
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
+    n_points = len(position)
+    pieces = []
+    while len(pieces) < n_pieces:
+        len_traj = int(round(np.random.normal(mu, sigma)))
+        if len_traj > n_points:
+            continue
+        max_start = n_points - len_traj
+        start = np.random.randint(0, max_start + 1)
+        pieces += [position[start : start + len_traj, :]]
+    return pieces
+
+
 def compute_piecewise_deflections(
     position: np.ndarray,
     piece_size: int,
@@ -833,3 +986,294 @@ def compute_piecewise_deflections(
         if len(piece) >= 3
     ]
     return deflections
+
+
+def compute_deflections_random_pieces(
+    position: np.ndarray,
+    n_pieces=20,
+    measure: str = "straightness_index",
+) -> list[float]:
+    """Compute the deflection using the given method on random pieces
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    n_pieces : int
+        Number of pieces for which the deflection will be computed, by default 20
+    measure : str, optional
+        The deflection measure to be used, by default "straightness_index"
+
+    Returns
+    -------
+    list[float]
+        The deflection values for all pieces
+    """
+    pieces = get_random_pieces(position, n_pieces)
+    deflections = [
+        compute_deflection(piece, measure=measure)
+        for piece in pieces
+        if len(piece) >= 3
+    ]
+    pieces_sizes = [
+        compute_net_displacement(piece) for piece in pieces if len(piece) > 3
+    ]
+    return deflections, pieces_sizes
+
+
+def get_time_step(trajectory: np.ndarray) -> float:
+    """Computes the time step of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The most frequent time step in the trajectory
+    """
+
+    if len(trajectory) <= 1:
+        raise ValueError(
+            f"Trajectory should have at least two data points ({len(trajectory)} found)."
+        )
+    times = trajectory[:, 0]
+    # find most frequent time step
+    traj_time_steps = times[1:] - times[:-1]
+    values, counts = np.unique(traj_time_steps, return_counts=True)
+    ind = np.argmax(counts)
+    step = values[ind]
+    return step
+
+
+def resample_trajectory(trajectory: np.ndarray, sampling_time: int = 500) -> np.ndarray:
+    """Resample the trajectory using the given time step
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    sampling_time : int, optional
+        The time step to use (in ms), by default 500
+
+    Returns
+    -------
+    np.ndarray
+        The trajectory sampled a intervals of given time
+    """
+    current_time_step = get_time_step(trajectory)
+    if (
+        current_time_step < 1.2 * sampling_time
+        and current_time_step > 0.8 * sampling_time
+    ):  # nothing to do
+        return trajectory
+
+    times = trajectory[:, 0]
+    traj_time_steps = times[1:] - times[:-1]
+
+    rows_to_keep = [0]
+    current_step = 0
+    for i, time_step in enumerate(traj_time_steps):
+        if current_step >= sampling_time:
+            rows_to_keep += [i]
+            current_step = 0
+        current_step += time_step
+    return trajectory[rows_to_keep, ...]
+
+
+def compute_time_to_collision(obs_1: np.ndarray, obs_2: np.ndarray, delta=500) -> float:
+    """Compute the expected time to collision between two pedestrians, given their current position
+    and instantaneous velocity. Start by computing the collision point between the straight line trajectories
+    and verify that both pedestrians reach this location at the same time (with a certain margin delta in ms)
+
+    Parameters
+    ----------
+    obs_1 : np.ndarray
+        An observation point (position, velocity)
+    obs_2 : np.ndarray
+        An observation point (position, velocity)
+    delta : int, optional
+        The margin to account for a real collision (i.e. pedestrians reach the collision at the same
+        time more or less delta, |t1-t2| < delta), by default 500
+
+    Returns
+    -------
+    float
+        _description_
+    """
+    pos_1 = obs_1[1:3]
+    vel_1 = obs_1[5:7]
+    pos_2 = obs_2[1:3]
+    vel_2 = obs_2[5:7]
+
+    # find intersection point of line from pos_1 directed by vel_1 to
+    # line from pos_2 directed by vel_2
+    # i.e solve the system : P = pos_1 + t * vel_1 = pos_2 + t * vel_2
+    # solve with Cramer's rule
+    m1 = np.array([[pos_2[0] - pos_1[0], -vel_2[0]], [pos_2[1] - pos_1[1], -vel_2[1]]])
+    m2 = np.array([[vel_1[0], pos_2[0] - pos_1[0]], [vel_1[1], pos_2[1] - pos_1[1]]])
+    m3 = np.array([[vel_1[0], -vel_2[0]], [vel_1[1], -vel_2[1]]])
+    t_1_coll = np.linalg.det(m1) / np.linalg.det(m3)
+    t_2_coll = np.linalg.det(m2) / np.linalg.det(m3)
+
+    if t_1_coll < 0 or t_2_coll < 0 or 1000 * abs(t_1_coll - t_2_coll) > delta:
+        return -1, None
+    else:
+        t_coll = (t_1_coll + t_2_coll) / 2
+        pos_coll = pos_1 + t_coll * vel_1
+        return t_coll, pos_coll
+
+
+def align_trajectories_at_origin(
+    trajectory_ref: np.ndarray, trajectories: list[np.ndarray]
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Transform the trajectories in such a way that position for trajectory_ref will always
+     be at the origin and velocity for A will be aligned along the positive x axis.
+     Other trajectories are moved to the same reference frame
+
+    Parameters
+    ----------
+    trajectory_ref : np.ndarray
+        The trajectory that will be aligned with the x axis
+    trajectories : list[np.ndarray]
+        A list of trajectories to transform in that reference frame
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        The aligned trajectories
+    """
+
+    # build the rotation matrix
+    rotation_matrices = np.zeros(
+        (len(trajectory_ref), 2, 2)
+    )  # 1 rotation matrix per observation
+    vel_mag = np.linalg.norm(trajectory_ref[:, 5:7], axis=1)
+    cos_rot = trajectory_ref[:, 5] / vel_mag
+    sin_rot = trajectory_ref[:, 6] / vel_mag
+
+    rotation_matrices[:, 0, 0] = cos_rot
+    rotation_matrices[:, 0, 1] = sin_rot
+    rotation_matrices[:, 1, 0] = -sin_rot
+    rotation_matrices[:, 1, 1] = cos_rot
+
+    transformed_ref = trajectory_ref.copy()
+    # translate the position to have it always at 0, 0
+    transformed_ref[:, 1:3] -= trajectory_ref[:, 1:3]
+    # translate the velocities
+    transformed_ref[:, 5:7] -= trajectory_ref[:, 5:7]
+
+    transformed_trajectories = []
+    for trajectory in trajectories:
+        transformed_trajectory = trajectory.copy()
+        # transform the trajectory
+        pos = transformed_trajectory[:, 1:3]
+        pos -= trajectory_ref[:, 1:3]
+        rotated_pos = np.diagonal(np.dot(rotation_matrices, pos.T), axis1=0, axis2=2).T
+        transformed_trajectory[:, 1:3] = rotated_pos
+
+        # transform the velocities
+        vel = transformed_trajectory[:, 5:7]
+        vel -= trajectory_ref[:, 5:7]
+        rotated_vel = np.diagonal(np.dot(rotation_matrices, vel.T), axis1=0, axis2=2).T
+        transformed_trajectory[:, 5:7] = rotated_vel
+        transformed_trajectories += [transformed_trajectory]
+
+    return transformed_ref, transformed_trajectories
+
+
+def compute_observed_minimum_distance(
+    trajectory: np.ndarray, interpolate: bool = False
+) -> float:
+    """Compute the observed minimum distance between the trajectory and the origin. Possibility
+    to interpolate with the velocities to improve accuracy.
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    interpolate : bool, optional
+        Whether or not to interpolate using the velocities, by default False
+
+    Returns
+    -------
+    float
+        The observed minimum distance
+    """
+    pos = trajectory[:, 1:3]
+    vel = trajectory[:, 5:7]
+
+    d = np.linalg.norm(pos, axis=1)
+    if not interpolate:
+        return np.min(d)
+    else:
+        # use velocities to interpolate the minimum distance:
+        # project the position vector NO (from non group to group, i.e origin)
+        # onto the line directed by
+        # the velocity vector to get the distance to the point P for which the distance
+        # between the line directed by the velocity and the origin
+        # is smallest
+        v_magn = np.linalg.norm(vel, axis=1)
+        # print(v_magn)
+        lambdas = (
+            -np.matmul(vel, pos.T).diagonal() / v_magn
+        )  # the diagonal of the matrix contains the dot products
+        # compute the time to reach the point P
+        t_to_P = (lambdas / v_magn)[:-1]  # last point is not used
+        # delta_ts = (trajectory_B[1:, 0] - trajectory_B[:-1, 0]) / 1000
+        ids_interpolate_possible = np.where(np.logical_and(t_to_P < 0.5, t_to_P >= 0))[
+            0
+        ]
+        d_interpolated = (
+            d[ids_interpolate_possible] ** 2 - lambdas[ids_interpolate_possible] ** 2
+        ) ** 0.5
+
+        if len(d_interpolated):
+            return np.min(d_interpolated)
+        else:
+            return np.min(d)
+
+
+def compute_straight_line_minimum_distance(
+    trajectory: np.ndarray, vicinity: int = 4000
+) -> float:
+    """Compute the distance between the origin and the straight line going through the entrance and exit
+    of the vicinity (i.e. the positions with x closer to +vicinity and -vicinity).
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    vicinity : int, optional
+        The size of the squared vicinity to be used, by default 4000
+
+    Returns
+    -------
+    float
+        The straight line distance
+    """
+    pos = trajectory[:, 1:3]
+    trajectory_in_vicinity = trajectory[
+        np.logical_and(np.abs(pos[:, 0]) < vicinity, np.abs(pos[:, 1]) < vicinity)
+    ]
+    pos_in_vicinity = trajectory_in_vicinity[:, 1:3]
+
+    if len(trajectory_in_vicinity) <= 2:
+        # do not get close enough
+        return None
+
+    idx_first = np.argmin(np.abs(pos_in_vicinity[:, 0] - vicinity))
+    first_pos_in_vicinity = pos_in_vicinity[idx_first, :]
+    idx_last = np.argmin(np.abs(pos_in_vicinity[:, 0] + vicinity))
+    last_pos_in_vicinity = pos_in_vicinity[idx_last, :]
+    # compute the distance between the line
+    # from first F to last L and the point O at 0,0
+    # i.e. (FL x OF) / ||OF||
+
+    distance_to_straight_line = np.abs(
+        np.cross(last_pos_in_vicinity - first_pos_in_vicinity, first_pos_in_vicinity)
+    ) / np.linalg.norm(last_pos_in_vicinity - first_pos_in_vicinity)
+
+    return distance_to_straight_line

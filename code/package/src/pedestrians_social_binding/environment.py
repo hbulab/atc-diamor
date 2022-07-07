@@ -10,10 +10,11 @@ import os
 class Environment:
     def __init__(self, name, data_dir):
 
-        if name not in ["atc", "atc:corridor", "diamor"]:
+        if name not in ["atc", "atc:corridor", "diamor", "diamor:corridor"]:
             raise ValueError(f"Unknown environment {name}.")
+        self.short_name = name.split(":")[0]
         self.name = name
-        self.data_dir = os.path.join(data_dir, self.name.split(":")[0])
+        self.data_dir = os.path.join(data_dir, self.short_name)
         self.boundaries = BOUNDARIES[name]
         self.days = (
             DAYS_ATC
@@ -30,7 +31,7 @@ class Environment:
         ]
 
     def get_pedestrians(
-        self, ids=[], thresholds=[], no_groups=False, days=None
+        self, ids=[], thresholds=[], no_groups=False, days=None, sampling_time=None
     ) -> list[Pedestrian]:
 
         if days is None:
@@ -59,6 +60,10 @@ class Environment:
                 if ids and ped_id not in ids:
                     continue
                 trajectory = daily_traj[ped_id]
+                if sampling_time is not None:
+                    trajectory = resample_trajectory(
+                        trajectory, sampling_time=sampling_time
+                    )
                 if ped_id in individual_annotations:
                     groups = individual_annotations[ped_id]["groups"]
                 else:
@@ -83,12 +88,14 @@ class Environment:
         thresholds=[],
         no_groups=False,
         days=None,
-    ) -> dict[any, Pedestrian]:
+        sampling_time=None,
+    ) -> dict[any, list[Pedestrian]]:
         pedestrians = self.get_pedestrians(
             ids=ids,
             thresholds=thresholds,
             no_groups=no_groups,
             days=days,
+            sampling_time=sampling_time,
         )
 
         grouped_pedestrians = {}
@@ -113,6 +120,7 @@ class Environment:
         group_thresholds=[],
         size=None,
         with_social_binding=False,
+        sampling_time=None,
     ) -> list[Group]:
         if days is None:
             days = self.days
@@ -142,7 +150,10 @@ class Environment:
 
                 group_data = groups_annotations[group_id]
 
-                if with_social_binding and not SOCIAL_BINDING[self.name] in group_data:
+                if (
+                    with_social_binding
+                    and not SOCIAL_BINDING[self.short_name] in group_data
+                ):
                     continue
 
                 members = []
@@ -156,6 +167,10 @@ class Environment:
                         trajectory = daily_traj[group_member_id]
                     else:
                         continue
+                    if sampling_time is not None:
+                        trajectory = resample_trajectory(
+                            trajectory, sampling_time=sampling_time
+                        )
                     group_member = Pedestrian(
                         group_member_id, self, day, trajectory, [group_id]
                     )
@@ -185,27 +200,31 @@ class Environment:
     def get_groups_grouped_by(
         self,
         group_by_value,
-        thresholds=[],
+        ped_thresholds=[],
+        group_thresholds=[],
         days=None,
         size=None,
         with_social_binding=False,
-    ) -> dict[any, Group]:
+        sampling_time=None,
+    ) -> dict[any, list[Group]]:
 
         groups = self.get_groups(
             days,
             size=size,
-            thresholds=thresholds,
+            ped_thresholds=ped_thresholds,
+            group_thresholds=group_thresholds,
             with_social_binding=with_social_binding,
+            sampling_time=sampling_time,
         )
 
         grouped_groups = {}
         for group in groups:
-            if group_by_value not in group.annotations:
-                # raise AttributeError(
-                #     f"Group-by value '{group_by_value}' not found in group {group}."
-                # )
+            if group_by_value in group.annotations:
+                value = group.annotations[group_by_value]
+            elif hasattr(group, group_by_value):
+                value = getattr(group, group_by_value)
+            else:
                 continue
-            value = group.annotations[group_by_value]
             if value not in grouped_groups:
                 grouped_groups[value] = []
             grouped_groups[value] += [group]

@@ -47,10 +47,13 @@ def plot_static_2D_trajectory(
 def plot_animated_2D_trajectory(
     trajectory: np.ndarray,
     title: str = None,
+    vel: bool = False,
+    colors: list[str] = None,
     boundaries: dict = None,
     show: bool = True,
     save_path: str = None,
     loop: bool = False,
+    background: str = None,
 ):
     """Plot the trajectory of a pedestrian, as an animation
 
@@ -60,6 +63,8 @@ def plot_animated_2D_trajectory(
         A trajectory
     title : str, optional
         A title for the animation, by default None
+    vel : bool, optional
+        Whether or not the velocities should be displayed as arrows, by default False
     boundaries : dict, optional
         The boundaries of the environment to be use as axis limits, by default None
     show : bool, optional
@@ -68,11 +73,15 @@ def plot_animated_2D_trajectory(
         The path to the file where the animation will be saved, by default None
     loop : bool, optional
         Whether or not the animation should loop, by default False
+    background : str, optional
+        Path to an image to use as background, by default None
     """
-    x, y = trajectory[:, 1], trajectory[:, 2]
+    position = trajectory[:, 1:3] / 1000
+    velocity = trajectory[:, 5:7] / 1000
     # x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
 
-    colors = ["cornflowerblue"] * len(x)
+    if colors is None:
+        colors = ["cornflowerblue"] * len(position)
 
     fig, ax = plt.subplots()
     ax.scatter([], [], c=[])  # plot of x and y in time
@@ -81,16 +90,33 @@ def plot_animated_2D_trajectory(
         xmin, xmax = boundaries["xmin"] / 1000, boundaries["xmax"] / 1000
         ymin, ymax = boundaries["ymin"] / 1000, boundaries["ymax"] / 1000
     else:
-        xmin, xmax = min(x) / 1000, max(x) / 1000
-        ymin, ymax = min(y) / 1000, max(y) / 1000
+        xmin, xmax = min(position[:, 0]), max(position[:, 0])
+        ymin, ymax = min(position[:, 1]), max(position[:, 1])
 
-    def animate(i, ax, pos_Nx, pos_Ny, colorsN):
+    def animate(i, ax, position, velocity, colors):
         ax.clear()
-        ax.scatter(pos_Nx[:i], pos_Ny[:i], c=colorsN[:i], s=10)
+        ax.scatter(position[:i, 0], position[:i, 1], c=colors[:i], s=10)
+        if vel:
+            ax.arrow(
+                position[i, 0],
+                position[i, 1],
+                velocity[i, 0],
+                velocity[i, 1],
+                color="black",
+                head_length=1,
+                head_width=0.5,
+            )
         ax.set_title(title)
         ax.axis([xmin, xmax, ymin, ymax])
+        if background is not None:
+            img = plt.imread(background)
+            ax.imshow(img, extent=[xmin, xmax, ymin, ymax])
 
     ax.axis([xmin, xmax, ymin, ymax])
+
+    if background is not None:
+        img = plt.imread(background)
+        ax.imshow(img, extent=[xmin, xmax, ymin, ymax])
 
     if title is not None:
         ax.set_title(title)
@@ -99,8 +125,8 @@ def plot_animated_2D_trajectory(
     ani = animation.FuncAnimation(
         fig,
         animate,
-        range(len(x)),
-        fargs=(ax, x / 1000, y / 1000, colors),
+        range(len(position)),
+        fargs=(ax, position, velocity, colors),
         repeat=loop,
         interval=50,
         blit=False,
@@ -121,6 +147,7 @@ def plot_static_2D_trajectories(
     trajectories: list[np.ndarray],
     labels: list[str] = None,
     simultaneous: bool = False,
+    show_direction: bool=False,
     boundaries: dict = None,
     colors: list[str] = None,
     title: str = None,
@@ -137,6 +164,9 @@ def plot_static_2D_trajectories(
         A list of labels, by default None
     simultaneous : bool, optional
         Whether or not the trajectories should be cropped to the simultaneous observations, by default False
+    show_direction: bool, optional
+        Whether or not an arrow showing the direction should be plot,
+        based on the velocities, by default False
     boundaries : dict, optional
         The boundaries of the environment to be used as axis limits, by default None
     colors : list[str], optional
@@ -160,11 +190,25 @@ def plot_static_2D_trajectories(
             colors = COLORS[:n_traj]
 
     if labels is None:
-        labels = n_traj * [None]  # no labels
+        zip_labels = n_traj * [None]  # no labels
+    else:
+        zip_labels = labels
 
-    for label, trajectory, color in zip(labels, trajectories, colors):
+    for label, trajectory, color in zip(zip_labels, trajectories, colors):
         x, y = trajectory[:, 1], trajectory[:, 2]
         plt.scatter(x / 1000, y / 1000, c=color, s=10, label=label)
+
+        if show_direction:
+            middle = len(trajectory) // 2
+            plt.arrow(
+                x[middle] / 1000,
+                y[middle] / 1000,
+                trajectory[middle, 5] / 1000,
+                trajectory[middle, 6] / 1000,
+                color="black",
+                head_length=1,
+                head_width=0.5,
+            )
 
     if boundaries:
         plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
@@ -229,6 +273,8 @@ def plot_animated_2D_trajectories(
 
     if simultaneous:
         trajectories = compute_simultaneous_observations(trajectories)
+
+    trajectories = get_padded_trajectories(trajectories)
 
     positions = [traj[:, 1:3] / 1000 for traj in trajectories]
     velocities = [traj[:, 5:7] / 1000 for traj in trajectories]
