@@ -46,7 +46,7 @@ TRAJECTORY_COLUMNS = {
     "v_y": 6,
 }
 
-THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d", "delta", "theta"]
+THRESHOLDS = ["t", "x", "y", "z", "v", "v_x", "v_y", "d", "delta", "theta", "n"]
 
 REL_DIRS = ["opposite", "same", "cross"]
 
@@ -54,6 +54,15 @@ DEFLECTION_MEASURES = [
     "straightness_index",
     "sinuosity",
     "maximum_scaled_lateral_deviation",
+]
+
+ALL_DEFLECTION_MEASURES = [
+    "straightness_index",
+    "sinuosity",
+    "maximum_scaled_lateral_deviation",
+    "maximum_lateral_deviation",
+    "area_under_curve",
+    "scaled_area_under_curve"
 ]
 
 SOCIAL_BINDING = {"atc": "soc_rel", "diamor": "interaction"}

@@ -55,7 +55,7 @@ class Pedestrian:
         )
 
     def get_encountered_pedestrians(
-        self, pedestrians, proximity_threshold=4000, skip=[]
+        self, pedestrians, proximity_threshold=4000, skip=[], alone=False
     ):
         encounters = []
         for pedestrian in pedestrians:
@@ -77,6 +77,16 @@ class Pedestrian:
             ):
                 continue
             encounters += [pedestrian]
+
+        if alone is not None:
+            if alone:
+                encounters = compute_alone_encounters(
+                    encounters, self, proximity_threshold
+                )
+            else:
+                encounters = compute_not_alone_encounters(
+                    encounters, self, proximity_threshold
+                )
         return encounters
 
     def plot_2D_trajectory(

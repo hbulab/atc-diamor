@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tkinter.messagebox import NO
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
@@ -208,6 +209,35 @@ def compute_interpersonal_distance(
     return d
 
 
+def compute_absolute_difference_velocity(
+    trajectory_A: np.ndarray, trajectory_B: np.ndarray
+) -> np.ndarray:
+    """Compute the absolute difference of the velocity of two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    np.ndarray
+        1D array containing the pair-wise distances
+    """
+
+    sim_traj_A, sim_traj_B = compute_simultaneous_observations(
+        [trajectory_A, trajectory_B]
+    )
+    vel_A = sim_traj_A[:, 5:7]
+    vel_B = sim_traj_B[:, 5:7]
+
+    w = np.abs(np.linalg.norm(vel_A - vel_B, axis=1))
+
+    return w
+
+
 def compute_relative_direction(
     trajectory_A: np.ndarray, trajectory_B: np.ndarray
 ) -> str:
@@ -244,7 +274,10 @@ def compute_relative_direction(
     # dot product of vA and vB
     v_d_dot = np.sum(v_A * v_B, axis=1)
 
-    cos_vA_vB = v_d_dot / (np.linalg.norm(v_A, axis=1) * np.linalg.norm(v_B, axis=1))
+    norm_product = np.linalg.norm(v_A, axis=1) * np.linalg.norm(v_B, axis=1)
+    norm_product[norm_product == 0] = np.nan
+
+    cos_vA_vB = v_d_dot / norm_product
 
     # rel_pos = np.zeros(cos_vA_vB.shape)
 
@@ -301,6 +334,19 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
         else:
             return None
 
+    elif value == "n":  # threshold on the number of observation
+        trajectory = pedestrian.get_trajectory()
+        if min_val is not None and max_val is not None:
+            keep = len(trajectory) > min_val and len(trajectory) < max_val
+        elif min_val is not None:
+            keep = len(trajectory) > min_val
+        else:
+            keep = len(trajectory) < max_val
+        if keep:
+            return pedestrian
+        else:
+            return None
+
     elif value == "t":  # threshold on the time
         time = pedestrian.get_column("t")
         t_obs = time[-1] - time[0]
@@ -338,6 +384,7 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
     #     threshold_indices = np.setdiff1d(range(len(position)), bad_points_indices)
     #     # print(threshold_indices)
 
+    # elif value == "v":
     else:
         column = pedestrian.get_trajectory_column(value)
         mean_value = np.nanmean(column)
@@ -354,13 +401,21 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
             return pedestrian
         else:
             return None
-
-    # if len(threshold_indices) > 0:
-    #     trajectory = pedestrian.get_trajectory()[threshold_indices, :]
-    #     pedestrian.set_trajectory(trajectory)
-    #     return pedestrian
     # else:
-    #     return None
+    #     column = pedestrian.get_trajectory_column(value)
+    #     mean_value = np.nanmean(column)
+    #     if min_val is not None and max_val is not None:
+    #         threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
+    #     elif min_val is not None:
+    #         threshold_indices = np.where(column >= min_val)[0]
+    #     else:
+    #         threshold_indices = np.where(column <= max_val)[0]
+    #     if len(threshold_indices) > 0:
+    #         trajectory = pedestrian.get_trajectory()[threshold_indices, :]
+    #         pedestrian.set_trajectory(trajectory)
+    #         return pedestrian
+    #     else:
+    #         return None
 
 
 def filter_pedestrians(
@@ -478,6 +533,49 @@ def compute_interpersonal_distance(pos_A: np.ndarray, pos_B: np.ndarray) -> np.n
     """
     dist_AB = np.linalg.norm(pos_A - pos_B, axis=1)
     return dist_AB
+
+
+def compute_depth_and_breadth(traj_A: np.ndarray, traj_B: np.ndarray) -> np.ndarray:
+    """Compute the distance between two position, at each time stamp, along the
+    direction of the group's motion (the depth) and along
+    direction orthogonal to the group's motion (the breadth). Assumes that the
+    values of position are for corresponding time stamps.
+
+    Parameters
+    ----------
+    traj_A : np.ndarray
+        A trajectory
+    traj_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    np.ndarray
+        The array of breadth at all time stamps
+    """
+    group_velocity = compute_center_of_mass([traj_A, traj_B])[:, 5:7]
+    u_v = (
+        group_velocity / np.linalg.norm(group_velocity, axis=1)[:, None]
+    )  # unitary vector
+    pos_A = traj_A[:, 1:3]
+    pos_B = traj_B[:, 1:3]
+    vec_AB = pos_B - pos_A
+    # the depth is component of vec_AB along u_v and the breadth is the component
+    # of vec_AB along the direction orthogonal to u_v
+    vec_depth = np.sum(vec_AB * u_v, axis=1)[:, None] * u_v
+    depth = np.linalg.norm(vec_depth, axis=1)
+    vec_breadth = vec_AB - vec_depth
+    breadth = np.linalg.norm(vec_breadth, axis=1)
+
+    dist_AB = np.linalg.norm(pos_A - pos_B, axis=1)
+    # print(
+    #     dist_AB[0],
+    #     depth[0],
+    #     breadth[0],
+    #     dist_AB[0] - (depth[0] ** 2 + breadth[0] ** 2) ** 0.5,
+    # )
+
+    return depth, breadth
 
 
 def compute_center_of_mass(trajectories: list[np.ndarray]) -> np.ndarray:
@@ -852,6 +950,10 @@ def compute_deflection(
         return compute_area_under_the_curve(position)
     elif measure == "scaled_area_under_curve":
         return compute_area_under_the_curve(position, scaled=True)
+    else:
+        raise ValueError(
+            f"Unknown deflection measure {measure}. Expected one of {ALL_DEFLECTION_MEASURES}."
+        )
 
 
 def get_pieces(
@@ -920,6 +1022,35 @@ def get_random_pieces(position: np.ndarray, n_pieces=20) -> list[np.ndarray]:
         min_i = min(i1, i2)
         max_i = max(i1, i2)
         pieces += [position[min_i:max_i, :]]
+    return pieces
+
+
+def get_random_pieces_trajectory(
+    trajectory: np.ndarray, n_pieces=20
+) -> list[np.ndarray]:
+    """Extract random pieces from a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_pieces : int
+        Number of pieces for which the deflection will be computed, by default 20
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
+    n_points = len(trajectory)
+    pieces = []
+    while len(pieces) < n_pieces:
+        i1 = np.random.randint(0, n_points - 1)
+        i2 = np.random.randint(0, n_points - 1)
+        if i1 == i2:
+            continue
+        min_i = min(i1, i2)
+        max_i = max(i1, i2)
+        pieces += [trajectory[min_i:max_i, :]]
     return pieces
 
 
@@ -1256,7 +1387,7 @@ def compute_straight_line_minimum_distance(
     """
     pos = trajectory[:, 1:3]
     trajectory_in_vicinity = trajectory[
-        np.logical_and(np.abs(pos[:, 0]) < vicinity, np.abs(pos[:, 1]) < vicinity)
+        np.logical_and(np.abs(pos[:, 0]) <= vicinity, np.abs(pos[:, 1]) <= vicinity)
     ]
     pos_in_vicinity = trajectory_in_vicinity[:, 1:3]
 
@@ -1268,6 +1399,7 @@ def compute_straight_line_minimum_distance(
     first_pos_in_vicinity = pos_in_vicinity[idx_first, :]
     idx_last = np.argmin(np.abs(pos_in_vicinity[:, 0] + vicinity))
     last_pos_in_vicinity = pos_in_vicinity[idx_last, :]
+
     # compute the distance between the line
     # from first F to last L and the point O at 0,0
     # i.e. (FL x OF) / ||OF||
@@ -1277,3 +1409,109 @@ def compute_straight_line_minimum_distance(
     ) / np.linalg.norm(last_pos_in_vicinity - first_pos_in_vicinity)
 
     return distance_to_straight_line
+
+
+def compute_alone_encounters(
+    encounters: list[Pedestrian], pedestrian: Pedestrian, proximity_threshold: float
+):
+    """Filter a list of encounters to retain only the one where the encountered pedestrian
+    is alone in the vicinity of the considered pedestrian.
+
+    Parameters
+    ----------
+    encounters : list[Pedestrian]
+        A list of encountered pedestrians
+    pedestrian : Pedestrian
+        A pedestrian for which the encountered are computed
+    proximity_threshold : float
+        The size of the vicinity to consider
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+    alone_encounters = []
+    for pedestrian_A in encounters:
+        alone = True
+        for pedestrian_B in encounters:
+            if pedestrian_A.get_id() == pedestrian_B.get_id():
+                continue
+            [traj_ped, traj_ped_A, traj_ped_B,] = compute_simultaneous_observations(
+                [
+                    pedestrian.get_trajectory(),
+                    pedestrian_A.get_trajectory(),
+                    pedestrian_B.get_trajectory(),
+                ]
+            )
+            d_A = compute_interpersonal_distance(traj_ped, traj_ped_A)
+            d_B = compute_interpersonal_distance(traj_ped, traj_ped_B)
+
+            traj_with_A = traj_ped[d_A < proximity_threshold]
+            traj_with_B = traj_ped[d_B < proximity_threshold]
+
+            # plot_animated_2D_trajectories([traj_with_A, traj_with_B])
+
+            if (
+                len(compute_simultaneous_observations([traj_with_A, traj_with_B])[0])
+                > len(traj_with_A) / 2
+            ):
+                alone = False
+                break
+        if alone:
+            alone_encounters += [pedestrian_A]
+
+    return alone_encounters
+
+
+def compute_not_alone_encounters(
+    encounters: list[Pedestrian], pedestrian: Pedestrian, proximity_threshold: float
+):
+    """Filter a list of encounters to retain only the one where the encountered pedestrian
+    is not alone in the vicinity of the considered pedestrian.
+
+    Parameters
+    ----------
+    encounters : list[Pedestrian]
+        A list of encountered pedestrians
+    pedestrian : Pedestrian
+        A pedestrian for which the encountered are computed
+    proximity_threshold : float
+        The size of the vicinity to consider
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+    not_alone_encounters = []
+    for pedestrian_A in encounters:
+        alone = True
+        for pedestrian_B in encounters:
+            if pedestrian_A.get_id() == pedestrian_B.get_id():
+                continue
+            [traj_ped, traj_ped_A, traj_ped_B,] = compute_simultaneous_observations(
+                [
+                    pedestrian.get_trajectory(),
+                    pedestrian_A.get_trajectory(),
+                    pedestrian_B.get_trajectory(),
+                ]
+            )
+            d_A = compute_interpersonal_distance(traj_ped, traj_ped_A)
+            d_B = compute_interpersonal_distance(traj_ped, traj_ped_B)
+
+            traj_with_A = traj_ped[d_A < proximity_threshold]
+            traj_with_B = traj_ped[d_B < proximity_threshold]
+
+            # plot_animated_2D_trajectories([traj_with_A, traj_with_B])
+
+            if (
+                len(compute_simultaneous_observations([traj_with_A, traj_with_B])[0])
+                > len(traj_with_A) / 2
+            ):
+                alone = False
+                break
+        if not alone:
+            not_alone_encounters += [pedestrian_A]
+
+    return not_alone_encounters

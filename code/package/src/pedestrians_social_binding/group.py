@@ -46,17 +46,38 @@ class Group:
             )
         members_trajectories = [member.trajectory for member in self.members]
         traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
-        return compute_interpersonal_distance(traj_A, traj_B)
+        pos_A = traj_A[:, 1:3]
+        pos_B = traj_B[:, 1:3]
+        return compute_interpersonal_distance(pos_A, pos_B)
+
+    def get_depth_and_breadth(self):
+        if self.size != 2:
+            raise ValueError(
+                f"Cannot compute the breadth on a group with size {self.size}."
+            )
+        members_trajectories = [member.trajectory for member in self.members]
+        traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
+        return compute_depth_and_breadth(traj_A, traj_B)
 
     def get_relative_orientation(self):
 
         if self.size != 2:
             raise ValueError(
-                f"Cannot compute the interpersonal distance on a group with size {self.size}."
+                f"Cannot compute the relative orientation on a group with size {self.size}."
             )
         members_trajectories = [member.trajectory for member in self.members]
         traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
         return compute_relative_orientation(traj_A, traj_B)
+
+    def get_absolute_difference_velocity(self):
+
+        if self.size != 2:
+            raise ValueError(
+                f"Cannot compute the absolute difference of velocity on a group with size {self.size}."
+            )
+        members_trajectories = [member.trajectory for member in self.members]
+        traj_A, traj_B = compute_simultaneous_observations(members_trajectories)
+        return compute_absolute_difference_velocity(traj_A, traj_B)
 
     def get_center_of_mass_trajectory(self):
         members_trajectories = [member.trajectory for member in self.members]
