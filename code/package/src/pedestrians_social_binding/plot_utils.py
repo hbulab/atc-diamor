@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -32,6 +33,7 @@ def plot_static_2D_trajectory(
     plt.scatter(x / 1000, y / 1000, c="cornflowerblue", s=10)
     plt.xlabel("x (m)")
     plt.ylabel("y (m)")
+    plt.axis("scaled")
     if boundaries:
         plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
         plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
@@ -147,12 +149,13 @@ def plot_static_2D_trajectories(
     trajectories: list[np.ndarray],
     labels: list[str] = None,
     simultaneous: bool = False,
-    show_direction: bool=False,
+    show_direction: bool = False,
     boundaries: dict = None,
     colors: list[str] = None,
     title: str = None,
     show: bool = True,
     save_path: str = None,
+    ax: matplotlib.axes.Axes = None,
 ):
     """Plot the trajectories of a set of pedestrians
 
@@ -180,6 +183,9 @@ def plot_static_2D_trajectories(
     """
     n_traj = len(trajectories)
 
+    if not ax:
+        fig, ax = plt.subplots()
+
     if simultaneous:
         trajectories = compute_simultaneous_observations(trajectories)
 
@@ -196,11 +202,12 @@ def plot_static_2D_trajectories(
 
     for label, trajectory, color in zip(zip_labels, trajectories, colors):
         x, y = trajectory[:, 1], trajectory[:, 2]
-        plt.scatter(x / 1000, y / 1000, c=color, s=10, label=label)
+        alphas = np.linspace(0, 1, len(x))
+        ax.scatter(x / 1000, y / 1000, c=color, alpha=alphas, s=10, label=label)
 
         if show_direction:
             middle = len(trajectory) // 2
-            plt.arrow(
+            ax.arrow(
                 x[middle] / 1000,
                 y[middle] / 1000,
                 trajectory[middle, 5] / 1000,
@@ -210,18 +217,20 @@ def plot_static_2D_trajectories(
                 head_width=0.5,
             )
 
+    ax.axis("scaled")
+
     if boundaries:
         plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
         plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
 
     if title is not None:
         plt.title(title)
-    plt.xlabel("x (m)")
+    ax.set_xlabel("x (m)")
 
     if labels is not None:
         plt.legend()
 
-    plt.ylabel("y (m)")
+    ax.set_ylabel("y (m)")
     if show:
         plt.show()
 
