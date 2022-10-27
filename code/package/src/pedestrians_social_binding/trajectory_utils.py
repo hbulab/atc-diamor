@@ -385,6 +385,19 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
     #     # print(threshold_indices)
 
     # elif value == "v":
+    elif value in ["x", "y"]:  # threshold on the position
+        column = pedestrian.get_trajectory_column(value)
+        mean_value = np.nanmean(column)
+        if min_val is not None and max_val is not None:
+            threshold_indices = np.where((column >= min_val) & (column <= max_val))[0]
+        elif min_val is not None:
+            threshold_indices = np.where(column >= min_val)[0]
+        else:
+            threshold_indices = np.where(column <= max_val)[0]
+        if len(threshold_indices) > 0:
+            trajectory = pedestrian.get_trajectory()[threshold_indices, :]
+            pedestrian.set_trajectory(trajectory)
+            return pedestrian
     else:
         column = pedestrian.get_trajectory_column(value)
         mean_value = np.nanmean(column)
@@ -1281,6 +1294,7 @@ def align_trajectories_at_origin(
     rotation_matrices = np.zeros(
         (len(trajectory_ref), 2, 2)
     )  # 1 rotation matrix per observation
+
     vel_mag = np.linalg.norm(trajectory_ref[:, 5:7], axis=1)
     cos_rot = trajectory_ref[:, 5] / vel_mag
     sin_rot = trajectory_ref[:, 6] / vel_mag
@@ -1353,16 +1367,19 @@ def compute_observed_minimum_distance(
         )  # the diagonal of the matrix contains the dot products
         # compute the time to reach the point P
         t_to_P = (lambdas / v_magn)[:-1]  # last point is not used
-        # delta_ts = (trajectory_B[1:, 0] - trajectory_B[:-1, 0]) / 1000
-        ids_interpolate_possible = np.where(np.logical_and(t_to_P < 0.5, t_to_P >= 0))[
-            0
-        ]
+        delta_ts = (trajectory[1:, 0] - trajectory[:-1, 0]) / 1000
+        ids_interpolate_possible = np.where(
+            np.logical_and(t_to_P < delta_ts, t_to_P >= 0)
+        )[0]
+        # ids_interpolate_possible = np.where(np.logical_and(t_to_P < 500, t_to_P >= 0))[
+        #     0
+        # ]
         d_interpolated = (
             d[ids_interpolate_possible] ** 2 - lambdas[ids_interpolate_possible] ** 2
         ) ** 0.5
 
         if len(d_interpolated):
-            return np.min(d_interpolated)
+            return min(np.min(d_interpolated), np.min(d))
         else:
             return np.min(d)
 
@@ -1407,6 +1424,65 @@ def compute_straight_line_minimum_distance(
     distance_to_straight_line = np.abs(
         np.cross(last_pos_in_vicinity - first_pos_in_vicinity, first_pos_in_vicinity)
     ) / np.linalg.norm(last_pos_in_vicinity - first_pos_in_vicinity)
+
+    return distance_to_straight_line
+
+
+def compute_straight_line_minimum_distance_from_vel(
+    trajectory: np.ndarray, vicinity: int = 4000, n_points_average: int = 4
+) -> float:
+    """Compute the distance between the origin and the straight line going through the entrance and exit
+    of the vicinity (i.e. the positions with x closer to +vicinity and -vicinity).
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    vicinity : int, optional
+        The size of the squared vicinity to be used, by default 4000
+
+    Returns
+    -------
+    float
+        The straight line distance
+    """
+    pos = trajectory[:, 1:3]
+    trajectory_in_vicinity = trajectory[
+        np.logical_and(np.abs(pos[:, 0]) <= vicinity, np.abs(pos[:, 1]) <= vicinity)
+    ]
+    pos_in_vicinity = trajectory_in_vicinity[:, 1:3]
+
+    if len(trajectory_in_vicinity) <= 2:
+        # do not get close enough
+        return None
+
+    # trajectory_before_vicinity = trajectory[
+    #     np.logical_and(
+    #         np.abs(pos[:, 0]) >= vicinity, np.abs(pos[:, 0]) <= vicinity + eps
+    #     )
+    # ]
+
+    # vel_before = np.nanmean(trajectory_before_vicinity[:, 5:7], axis=0)
+
+    idx_first = np.argmin(np.abs(pos_in_vicinity[:, 0] - vicinity))
+    first_pos_in_vicinity = pos_in_vicinity[idx_first, :]
+    # first_vel_in_vicinity = trajectory_in_vicinity[idx_first, 5:7]
+
+    vel_start_vicinity = np.nanmean(
+        trajectory_in_vicinity[idx_first : idx_first + 1 + n_points_average, 5:7],
+        axis=0,
+    )  # average vel over some points
+
+    # compute the distance from the line directed by the velocity to the origin
+    # i.e. (v x OF) / ||OF||
+
+    distance_to_straight_line = np.abs(
+        np.cross(vel_start_vicinity, first_pos_in_vicinity)
+    ) / np.linalg.norm(vel_start_vicinity)
+
+    # distance_to_straight_line = np.abs(
+    #     np.cross(vel_before, first_pos_in_vicinity)
+    # ) / np.linalg.norm(vel_before)
 
     return distance_to_straight_line
 
