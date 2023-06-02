@@ -1,5 +1,4 @@
 from __future__ import annotations
-from tkinter.messagebox import NO
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
@@ -13,6 +12,9 @@ from pedestrians_social_binding.parameters import *
 import numpy as np
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
+
+
+cross = lambda x, y, axis=None: np.cross(x, y, axis=axis)  # annotation bug
 
 
 def compute_simultaneous_observations(trajectories: list[np.ndarray]) -> list:
@@ -81,6 +83,32 @@ def get_trajectory_at_times(trajectory: np.ndarray, times: np.ndarray) -> np.nda
     trajectory_at_times[times_in_times_traj] = trajectory[times_traj_in_times]
 
     return trajectory_at_times
+
+
+def get_trajectory_in_time_frame(
+    trajectory: np.ndarray, t_min: int = None, t_max: int = None
+) -> np.ndarray:
+    """Get the observation from the trajectory, at the given times
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    t_min : int
+        the minimum time, by default None
+    t_max : int
+        the maximum time, by default None
+
+    Returns
+    -------
+    np.ndarray
+        Observations from the trajectory in between the given time boundaries
+    """
+    if t_min is not None:
+        trajectory = trajectory[trajectory[:, 0] >= t_min]
+    if t_max is not None:
+        trajectory = trajectory[trajectory[:, 0] <= t_max]
+    return trajectory
 
 
 def get_trajectories_at_times(
@@ -743,7 +771,7 @@ def compute_maximum_lateral_deviation(
     # from start S to end E and the point P
     # i.e. (SE x PE) / ||PE||
     distances_to_straight_line = np.abs(
-        np.cross(end_point - start_point, middle_points - start_point)
+        cross(end_point - start_point, middle_points - start_point)
     ) / np.linalg.norm(end_point - start_point)
     if scaled:  # divide by the distance from P to E
         distances_to_straight_line /= np.linalg.norm(end_point - start_point)
@@ -751,6 +779,40 @@ def compute_maximum_lateral_deviation(
     max_distance = np.max(distances_to_straight_line)
 
     return max_distance
+
+
+def compute_maximum_lateral_deviation_using_vel(
+    traj: np.ndarray,
+    n_average=3,
+    interpolate: bool = False,
+) -> float:
+    pos = traj[:, 1:3]
+    vel = traj[:, 5:7]
+    delta_ts = (traj[1:, 0] - traj[:-1, 0]) / 1000
+
+    start_point = pos[0]
+    middle_points = pos[1:-1]
+
+    start_vel = np.nanmean(traj[:n_average, 5:7], axis=0)
+
+    if not interpolate:
+        distances_to_straight_line = np.abs(
+            cross(start_vel, middle_points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        return max_distance
+
+    else:
+        # position after half time step, extrapolating velocity
+        extr_pos = pos[:-1] + delta_ts[:, None] / 2 * vel[:-1]
+        points = np.concatenate((middle_points, extr_pos))
+        distances_to_straight_line = np.abs(
+            cross(start_vel, points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        return max_distance
 
 
 def compute_net_displacement(position: np.ndarray) -> float:
@@ -835,6 +897,29 @@ def compute_turning_angles(position: np.ndarray) -> np.ndarray:
     return turning_angles
 
 
+def compute_angles(vectors_1: np.ndarray, vectors_2: np.ndarray) -> np.ndarray:
+    """Compute the angles between two arrays of 2D vectors
+
+    Parameters
+    ----------
+    vectors_1 : np.ndarray
+        Array of 2D vectors
+    vectors_2 : np.ndarray
+        Array of 2D vectors
+
+    Returns
+    -------
+    np.ndarray
+        The array of angles
+    """
+    angles = np.arctan2(vectors_1[:, 0], vectors_1[:, 1]) - np.arctan2(
+        vectors_2[:, 0], vectors_2[:, 1]
+    )
+    angles[angles > np.pi] -= 2 * np.pi
+    angles[angles < -np.pi] += 2 * np.pi
+    return angles
+
+
 def rediscretize_position(position: np.ndarray) -> np.ndarray:
     """Transforms the trajectory so that the distance between each point is fixed
 
@@ -913,7 +998,7 @@ def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> 
     # from start S to end E and the point P
     # i.e. (SE x PE) / ||PE||
     distances_to_straight_line = np.abs(
-        np.cross(end_point - start_point, position - start_point)
+        cross(end_point - start_point, position - start_point)
     ) / np.linalg.norm(end_point - start_point)
     # compte the integral using the trapezoid
     # compute the projection of the trajectory points onto the straight line
@@ -924,9 +1009,23 @@ def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> 
     ) ** 0.5
     bases = cumul_bases[1:] - cumul_bases[:-1]
 
+    # areas to the right are negative
+    projections = start_point + cumul_bases[:, None] * (
+        (end_point - start_point) / np.linalg.norm(end_point - start_point)
+    )
+    # plt.scatter(position[:, 0], position[:, 1])
+    # plt.scatter(projections[:, 0], projections[:, 1])
+    # plt.plot([start_point[0], end_point[0]], [start_point[1], end_point[1]])
+    # plt.axis("equal")
+    # plt.show()
+    vec_val = position - projections
+    sign = np.sign(np.sum(vec_val * projections, axis=1))
+    distances_to_straight_line *= sign
+
     areas = (
         bases * (distances_to_straight_line[:-1] + distances_to_straight_line[1:]) / 2
     )
+
     area_under_the_curve = np.sum(areas)
     if scaled:  # divide by the distance from P to E squared
         area_under_the_curve /= np.linalg.norm(end_point - start_point) ** 2
@@ -1030,10 +1129,10 @@ def get_random_pieces(position: np.ndarray, n_pieces=20) -> list[np.ndarray]:
     while len(pieces) < n_pieces:
         i1 = np.random.randint(0, n_points - 1)
         i2 = np.random.randint(0, n_points - 1)
-        if i1 == i2:
-            continue
         min_i = min(i1, i2)
         max_i = max(i1, i2)
+        if len(position[min_i:max_i, :]) <= 2:
+            continue
         pieces += [position[min_i:max_i, :]]
     return pieces
 
@@ -1422,7 +1521,7 @@ def compute_straight_line_minimum_distance(
     # i.e. (FL x OF) / ||OF||
 
     distance_to_straight_line = np.abs(
-        np.cross(last_pos_in_vicinity - first_pos_in_vicinity, first_pos_in_vicinity)
+        cross(last_pos_in_vicinity - first_pos_in_vicinity, first_pos_in_vicinity)
     ) / np.linalg.norm(last_pos_in_vicinity - first_pos_in_vicinity)
 
     return distance_to_straight_line
@@ -1456,14 +1555,6 @@ def compute_straight_line_minimum_distance_from_vel(
         # do not get close enough
         return None
 
-    # trajectory_before_vicinity = trajectory[
-    #     np.logical_and(
-    #         np.abs(pos[:, 0]) >= vicinity, np.abs(pos[:, 0]) <= vicinity + eps
-    #     )
-    # ]
-
-    # vel_before = np.nanmean(trajectory_before_vicinity[:, 5:7], axis=0)
-
     idx_first = np.argmin(np.abs(pos_in_vicinity[:, 0] - vicinity))
     first_pos_in_vicinity = pos_in_vicinity[idx_first, :]
     # first_vel_in_vicinity = trajectory_in_vicinity[idx_first, 5:7]
@@ -1477,7 +1568,7 @@ def compute_straight_line_minimum_distance_from_vel(
     # i.e. (v x OF) / ||OF||
 
     distance_to_straight_line = np.abs(
-        np.cross(vel_start_vicinity, first_pos_in_vicinity)
+        cross(vel_start_vicinity, first_pos_in_vicinity)
     ) / np.linalg.norm(vel_start_vicinity)
 
     # distance_to_straight_line = np.abs(

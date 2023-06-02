@@ -10,8 +10,10 @@ def plot_static_2D_trajectory(
     trajectory: np.ndarray,
     title: str = None,
     boundaries: dict = None,
+    vel: bool = False,
     show: bool = True,
     save_path: str = None,
+    ax: matplotlib.axes.Axes = None,
 ):
     """Plot the trajectory of a pedestrian, as an image
 
@@ -28,17 +30,27 @@ def plot_static_2D_trajectory(
     save_path : str, optional
         The path to the file where the image will be saved, by default None
     """
-    x, y = trajectory[:, 1], trajectory[:, 2]
-    # x, y = pedestrian.get_trajectory_column("x"), pedestrian.get_trajectory_column("y")
-    plt.scatter(x / 1000, y / 1000, c="cornflowerblue", s=10)
-    plt.xlabel("x (m)")
-    plt.ylabel("y (m)")
-    plt.axis("scaled")
+
+    if not ax:
+        fig, ax = plt.subplots()
+
+    x, y = trajectory[:, 1] / 1000, trajectory[:, 2] / 1000
+    ax.scatter(x, y, c="cornflowerblue", s=10)
+
+    if vel:
+        vx, vy = trajectory[:, 5] / 1000, trajectory[:, 6] / 1000
+        ax.quiver(x, y, vx, vy)
+
     if boundaries:
-        plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
-        plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
+        ax.set_xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
+        ax.set_ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
+
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    ax.set_aspect("equal")
+
     if title is not None:
-        plt.title(title)
+        ax.set_title(title)
     if show:
         plt.show()
 
@@ -333,7 +345,7 @@ def plot_animated_2D_trajectories(
                 )
 
         if vel:
-            for position, velocity, color in zip(positions, velocities, colors):
+            for position, velocity in zip(positions, velocities):
                 ax.arrow(
                     position[i, 0],
                     position[i, 1],

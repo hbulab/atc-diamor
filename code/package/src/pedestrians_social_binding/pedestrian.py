@@ -1,3 +1,4 @@
+from __future__ import annotations
 from asyncio import constants
 from pedestrians_social_binding.utils import *
 from pedestrians_social_binding.plot_utils import *
@@ -23,11 +24,14 @@ class Pedestrian:
     def __repr__(self):
         return f"Pedestrian({self.ped_id})"
 
-    def get_id(self):
+    def get_id(self) -> int:
         return self.ped_id
 
     def get_trajectory(self):
         return self.trajectory
+
+    def get_time(self):
+        return self.trajectory[:, 0]
 
     def set_trajectory(self, trajectory):
         self.trajectory = trajectory
@@ -55,8 +59,12 @@ class Pedestrian:
         )
 
     def get_encountered_pedestrians(
-        self, pedestrians, proximity_threshold=4000, skip=[], alone=False
-    ):
+        self,
+        pedestrians,
+        proximity_threshold: int | None = 4000,
+        skip: list[int] = [],
+        alone: bool | None = False,
+    ) -> list[Pedestrian]:
         encounters = []
         for pedestrian in pedestrians:
             if (
