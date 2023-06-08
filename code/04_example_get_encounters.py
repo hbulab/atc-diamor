@@ -15,11 +15,13 @@ if __name__ == "__main__":
     v = 4000
 
     for ped in all_pedestrians:
-        encounters = ped.get_encountered_pedestrians(v, all_pedestrians)
+        encounters = ped.get_encountered_pedestrians(all_pedestrians, proximity_threshold=v)
+
+        trajectories = [ped.trajectory] + [enc.trajectory for enc in encounters]
 
         if encounters:
             plot_animated_2D_trajectories(
-                [ped] + encounters,
+                trajectories,
                 boundaries=atc.boundaries,
                 vicinity=v,
                 simultaneous=False,

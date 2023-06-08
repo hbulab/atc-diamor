@@ -29,15 +29,8 @@ if __name__ == "__main__":
             distances_wrt_soc_rel[soc_rel] = []
 
         for group in groups_atc[soc_rel]:
-            members = group.get_members()
-            ped_A = members[0]
-            ped_B = members[1]
 
-            # plot_static_2D_trajectories(members, simultaneous=True)
-
-            distances = compute_interpersonal_distance(
-                ped_A.get_trajectory(), ped_B.get_trajectory()
-            )
+            distances = group.get_interpersonal_distance()
 
             distances_wrt_soc_rel[soc_rel] = np.concatenate(
                 (distances_wrt_soc_rel[soc_rel], distances / 1000)
@@ -70,13 +63,9 @@ if __name__ == "__main__":
             distances_wrt_interaction[interaction] = []
 
         for group in groups_diamor[interaction]:
-            members = group.get_members()
-            ped_A = members[0]
-            ped_B = members[1]
+            
+            distances = group.get_interpersonal_distance()
 
-            distances = compute_interpersonal_distance(
-                ped_A.get_trajectory(), ped_B.get_trajectory()
-            )
 
             # plot_static_2D_trajectories(
             #     members, boundaries=diamor.boundaries, simultaneous=True
