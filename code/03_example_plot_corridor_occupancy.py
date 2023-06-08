@@ -52,7 +52,7 @@ if __name__ == "__main__":
     plt.show()
 
     # get the occupancy grid for just the dyads
-    dyads = atc.get_groups(size=2, thresholds=[threshold_x, threshold_y])
+    dyads = atc.get_groups(size=2, ped_thresholds=[threshold_x, threshold_y])
 
     for dyad in dyads:
         x = dyad.get_as_individual().get_trajectory_column("x")
