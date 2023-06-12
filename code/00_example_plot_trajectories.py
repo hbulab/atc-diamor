@@ -22,7 +22,7 @@ if __name__ == "__main__":
         tot_group_member += size * len(groups)
     print(f" -> Found {tot_group_member} groups members.")
 
-    for pedestrian in non_groups[:3]:
+    for pedestrian in non_groups[:10]:
         pedestrian.plot_2D_trajectory(animate=False, scale=False)
 
     # -------- DIAMOR --------

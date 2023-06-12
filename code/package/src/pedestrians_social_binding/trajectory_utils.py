@@ -786,6 +786,22 @@ def compute_maximum_lateral_deviation_using_vel(
     n_average=3,
     interpolate: bool = False,
 ) -> float:
+    """Computes the maximum lateral deviation over the trajectory (the maximum distance from points of the trajectories to the line joining the first and last point of the trajectory).
+
+    Parameters
+    ----------
+    traj : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to average the velocity over, by default 3
+    interpolate : bool, optional
+        Whether or not to interpolate the velocity, by default False
+
+    Returns
+    -------
+    float
+        The value for the maximum lateral deviation
+    """
     pos = traj[:, 1:3]
     vel = traj[:, 5:7]
     delta_ts = (traj[1:, 0] - traj[:-1, 0]) / 1000
@@ -992,6 +1008,20 @@ def compute_sinuosity(position: np.ndarray) -> float:
 
 
 def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> float:
+    """Computes the area under the curve of the trajectory
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    scaled : bool, optional
+        If True, the area is scaled by the gross displacement of the trajectory, by default False
+
+    Returns
+    -------
+    float
+        The area under the curve
+    """
     start_point = position[0]
     end_point = position[-1]
     # for all points, compute the distance between the line

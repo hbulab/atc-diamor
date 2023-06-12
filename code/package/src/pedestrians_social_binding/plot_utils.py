@@ -19,16 +19,12 @@ def plot_static_2D_trajectory(
 
     Parameters
     ----------
-    pedestrian : np.ndarray
-        A pedestrian
-    title: str
-        A title for the animation, by default None
-    boundaries : dict, optional
-        The boundaries of the environment to be use as axis limits, by default None
-    show : bool, optional
-        Whether or not the image should be displayed, by default True
-    save_path : str, optional
-        The path to the file where the image will be saved, by default None
+    pedestrian : np.ndarray. A pedestrian
+    title: str, A title for the animation, by default None
+    boundaries : dict, optional. The boundaries of the environment to be use as axis limits, by default None
+    show : bool, optional. Whether or not the image should be displayed, by default True
+    save_path : str, optional. The path to the file where the image will be saved, by default None
+    ax : matplotlib.axes.Axes, optional, by default None
     """
 
     if not ax:

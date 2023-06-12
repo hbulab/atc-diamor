@@ -4,6 +4,22 @@ from pedestrians_social_binding.plot_utils import *
 
 
 class Group:
+    """Class representing a group of pedestrians. 
+    A group is defined by a set of pedestrians, a group id, an environment, a day and a set of annotations. 
+    The annotations are a dictionary of the form {annotation_type: annotation_value}.
+
+    ----------
+    Constructor of the class.
+
+    Parameters
+
+    group_id: int, the id of the group
+    members: list[Pedestrian], the list of pedestrians in the group
+    env: Environment, the environment in which the group evolves
+    day: str, the day of the observation
+    annotations: dict, the annotations of the group
+
+    """
     def __init__(self, group_id, members, env, day, annotations):
 
         self.group_id = group_id
@@ -13,32 +29,56 @@ class Group:
         self.day = day
         self.annotations = annotations
 
+        # We create a fake pedestrian corresponding to the group
         self.as_individual = Pedestrian(
             group_id, env, day, self.get_center_of_mass_trajectory(), []
         )
 
     def __str__(self):
+        """Returns a string representation of the group.
+        """
         return f"Group({self.group_id})"
 
+    
     def __repr__(self):
+        """Returns a string representation of the group.
+        """
         return f"Group({self.group_id})"
+
 
     def get_as_individual(self) -> Pedestrian:
+        """Returns the individual pedestrian corresponding to the group.
+        """
         return self.as_individual
 
+
     def get_id(self):
+        """Returns the group id.
+        """
         return self.group_id
 
+
     def get_size(self):
+        """Returns the center of mass trajectory of the group.
+        """
         return self.size
 
+
     def get_members(self) -> list[Pedestrian]:
+        """Returns the list of members of the group.
+        """
         return self.members
 
+
     def get_annotation(self, annotation_type):
+        """Returns the annotation of the group corresponding to the given annotation type.
+        """
         return self.annotations.get(annotation_type, None)
 
+
     def get_interpersonal_distance(self):
+        """Returns the interpersonal distance between the two pedestrians of the group.
+        """
 
         if self.size != 2:
             raise ValueError(
@@ -50,7 +90,12 @@ class Group:
         pos_B = traj_B[:, 1:3]
         return compute_interpersonal_distance(pos_A, pos_B)
 
+
     def get_depth_and_breadth(self):
+        """Returns the depth and breadth of the group. 
+        The depth is the distance between the two pedestrians of the group.
+        The breadth is the distance between the center of mass of the group and the line defined by the two pedestrians.
+        """
         if self.size != 2:
             raise ValueError(
                 f"Cannot compute the breadth on a group with size {self.size}."
@@ -60,6 +105,8 @@ class Group:
         return compute_depth_and_breadth(traj_A, traj_B)
 
     def get_relative_orientation(self):
+        """Returns the relative orientation of the group.
+        """
 
         if self.size != 2:
             raise ValueError(
@@ -70,6 +117,8 @@ class Group:
         return compute_relative_orientation(traj_A, traj_B)
 
     def get_absolute_difference_velocity(self):
+        """Returns the absolute difference of velocity of the group.
+        """
 
         if self.size != 2:
             raise ValueError(
@@ -80,6 +129,8 @@ class Group:
         return compute_absolute_difference_velocity(traj_A, traj_B)
 
     def get_center_of_mass_trajectory(self):
+        """Returns the center of mass trajectory of the group.
+        """
         members_trajectories = [member.trajectory for member in self.members]
         return compute_center_of_mass(members_trajectories)
 
@@ -91,7 +142,20 @@ class Group:
         show=True,
         save_path=None,
         loop=False,
-    ):
+    ): 
+        
+        """Plots the 2D trajectory of the group.
+
+        Parameters
+        ----------
+        scale: bool, whether to scale the trajectory to the environment boundaries
+        simultaneous: bool, whether to plot the trajectories simultaneously or not
+        animate: bool, whether to animate the trajectories or not
+        show: bool, whether to show the plot or not
+        save_path: str, the path where to save the plot
+        loop: bool, whether to loop the animation or not
+        """
+
 
         if scale:
             boundaries = self.env.boundaries
@@ -124,6 +188,19 @@ class Group:
             )
 
     def get_encountered_pedestrians(self, proximity_threshold, pedestrians, skip=[]):
+        """Returns the pedestrians encountered by the group.
+
+        Parameters
+        ----------
+        proximity_threshold: float, the proximity threshold to consider an encounter
+        pedestrians: list, the list of pedestrians to consider
+        skip: list, the list of pedestrians to skip
+
+        Returns
+        -------
+        list, the list of encountered pedestrians
+        """
+
         encounters = []
         members_id = [m.get_id() for m in self.members]
         for pedestrian in pedestrians:
@@ -151,6 +228,19 @@ class Group:
         return encounters
 
     def get_undisturbed_trajectory(self, proximity_threshold, pedestrians, skip=[]):
+        """Returns the undisturbed trajectory of the group.
+
+        Parameters
+        ----------
+        proximity_threshold: float, the proximity threshold to consider an encounter
+        pedestrians: list, the list of pedestrians to consider
+        skip: list, the list of pedestrians to skip
+
+        Returns
+        -------
+        array, the undisturbed trajectory
+        """
+        
         members_id = [m.get_id() for m in self.members]
         group_traj = self.get_center_of_mass_trajectory()
         times_in_vicinity = np.array([])

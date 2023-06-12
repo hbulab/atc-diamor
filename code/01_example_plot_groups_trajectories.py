@@ -6,7 +6,7 @@ if __name__ == "__main__":
     groups_atc = atc.get_groups(days=["0508"], size=3)
 
     for group in groups_atc:
-        group.as_individual.plot_2D_trajectory(animate=True, scale=True)
+        group.as_individual.plot_2D_trajectory(animate=False, scale=True)
 
     # diamor = Environment("diamor", data_dir="../data/formatted")
     # groups_diamor = diamor.get_groups(days=["06"], size=5)

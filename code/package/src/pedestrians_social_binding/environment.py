@@ -7,9 +7,26 @@ from pedestrians_social_binding.group import Group
 import os
 
 
-class Environment:
-    def __init__(self, name, data_dir):
 
+class Environment:
+    """Class representing an environment (ATC or DIAMOR). It contains the data of the pedestrians and groups. 
+    It is used to load the data and to get the pedestrians and groups. 
+    The data is loaded from the data directory.
+    The data directory should contain the following files:
+    - trajectories_{day}.pkl: a dictionary containing the trajectories of the pedestrians for each day
+    - individuals_annotations_{day}.pkl: a dictionary containing the annotations of the pedestrians for each day
+    - groups_annotations_{day}.pkl: a dictionary containing the annotations of the groups for each day
+    
+    ----------
+
+    Constructor of the Environment class.
+
+    Parameters
+    - name: name of the environment. Can be "atc", "atc:corridor", "diamor" or "diamor:corridor".
+    - data_dir: path to the directory containing the data.
+    """
+    def __init__(self, name, data_dir):
+        
         if name not in ["atc", "atc:corridor", "diamor", "diamor:corridor"]:
             raise ValueError(f"Unknown environment {name}.")
         self.short_name = name.split(":")[0]
@@ -22,6 +39,8 @@ class Environment:
             else DAYS_DIAMOR
         )
 
+
+    """Get the boundaries of the environment"""
     def get_boundaries(self):
         return [
             self.boundaries["xmin"],
@@ -30,9 +49,31 @@ class Environment:
             self.boundaries["ymax"],
         ]
 
+
+    """Get the pedestrians of the environment
+    - ids: list of ids of the pedestrians to get. If empty, all pedestrians are returned.
+    - thresholds: list of thresholds to apply to the pedestrians. If empty, no threshold is applied.
+    - no_groups: if True, only pedestrians that are not in a group are returned.
+    - days: list of days to get the pedestrians from. If empty, all days are used.
+    - sampling_time: if not None, the trajectories are resampled with the given sampling time.
+    """
     def get_pedestrians(
         self, ids=[], thresholds=[], no_groups=False, days=None, sampling_time=None
     ) -> list[Pedestrian]:
+        """Get the pedestrians of the environment
+        
+        Parameters 
+        ---------- 
+        ids : list of int, optional, list of ids of the pedestrians to get. If empty, all pedestrians are returned.
+        thresholds : list of float, optional, list of thresholds to apply to the pedestrians. If empty, no threshold is applied.
+        no_groups : bool, optional, if True, only pedestrians that are not in a group are returned.
+        days : list of int, optional, list of days to get the pedestrians from. If empty, all days are used.
+        sampling_time : float, optional, if not None, the trajectories are resampled with the given sampling time.
+
+        Returns
+        -------
+        list of Pedestrian, the list of pedestrians
+        """
 
         if days is None:
             days = self.days
@@ -81,6 +122,15 @@ class Environment:
 
         return pedestrians
 
+
+    """Get the pedestrians of the environment grouped by a given value
+    - group_by_value: the value to group the pedestrians by. It should be a property of the Pedestrian class.
+    - ids: list of ids of the pedestrians to get. If empty, all pedestrians are returned.
+    - thresholds: list of thresholds to apply to the pedestrians. If empty, no threshold is applied.
+    - no_groups: if True, only pedestrians that are not in a group are returned.
+    - days: list of days to get the pedestrians from. If empty, all days are used.
+    - sampling_time: if not None, the trajectories are resampled with the given sampling time.
+    """
     def get_pedestrians_grouped_by(
         self,
         group_by_value,
@@ -90,6 +140,22 @@ class Environment:
         days=None,
         sampling_time=None,
     ) -> dict[any, list[Pedestrian]]:
+        """Get the pedestrians of the environment grouped by a given value
+        
+        Parameters
+        ----------
+        
+        group_by_value : any, the value to group the pedestrians by. It should be a property of the Pedestrian class.
+        ids : list of int, optional, list of ids of the pedestrians to get. If empty, all pedestrians are returned.
+        thresholds : list of float, optional, list of thresholds to apply to the pedestrians. If empty, no threshold is applied.
+        no_groups : bool, optional, if True, only pedestrians that are not in a group are returned.
+        days : list of int, optional, list of days to get the pedestrians from. If empty, all days are used.
+        sampling_time : float, optional, if not None, the trajectories are resampled with the given sampling time.
+
+        Returns
+        -------
+        dict of list of Pedestrian, the pedestrians grouped by the given value
+        """
         pedestrians = self.get_pedestrians(
             ids=ids,
             thresholds=thresholds,
@@ -97,6 +163,7 @@ class Environment:
             days=days,
             sampling_time=sampling_time,
         )
+
 
         grouped_pedestrians = {}
         for pedestrian in pedestrians:
@@ -112,6 +179,16 @@ class Environment:
 
         return grouped_pedestrians
 
+
+    """Get the groups of the environment
+    - ids: list of ids of the groups to get. If empty, all groups are returned.
+    - days: list of days to get the groups from. If empty, all days are used.
+    - ped_thresholds: list of thresholds to apply to the pedestrians of the groups. If empty, no threshold is applied.
+    - group_thresholds: list of thresholds to apply to the groups. If empty, no threshold is applied.
+    - size: if not None, only groups with the given size are returned.
+    - with_social_binding: if True, only groups with social binding are returned.
+    - sampling_time: if not None, the trajectories are resampled with the given sampling time.
+    """
     def get_groups(
         self,
         ids=[],
@@ -122,8 +199,26 @@ class Environment:
         with_social_binding=False,
         sampling_time=None,
     ) -> list[Group]:
+        """Get the groups of the environment
+        
+        Parameters
+        ----------
+        
+        ids : list of int, optional, list of ids of the groups to get. If empty, all groups are returned.
+        days : list of int, optional, list of days to get the groups from. If empty, all days are used.
+        ped_thresholds : list of float, optional, list of thresholds to apply to the pedestrians of the groups. If empty, no threshold is applied.
+        group_thresholds : list of float, optional, list of thresholds to apply to the groups. If empty, no threshold is applied.
+        size : int, optional, if not None, only groups with the given size are returned.
+        with_social_binding : bool, optional, if True, only groups with social binding are returned.
+        sampling_time : float, optional, if not None, the trajectories are resampled with the given sampling time.
+
+        Returns
+        -------
+        list of Group, the groups of the environment
+        """
         if days is None:
             days = self.days
+
 
         groups = []
         for day in days:
@@ -197,6 +292,15 @@ class Environment:
 
         return groups
 
+    """Get the groups of the environment grouped by a given value
+    - group_by_value: the value to group the groups by. It should be a property of the Group class.
+    - ped_thresholds: list of thresholds to apply to the pedestrians of the groups. If empty, no threshold is applied.
+    - group_thresholds: list of thresholds to apply to the groups. If empty, no threshold is applied.
+    - days: list of days to get the groups from. If empty, all days are used.
+    - size: if not None, only groups with the given size are returned.
+    - with_social_binding: if True, only groups with social binding are returned.
+    - sampling_time: if not None, the trajectories are resampled with the given sampling time.
+    """
     def get_groups_grouped_by(
         self,
         group_by_value,
@@ -206,7 +310,24 @@ class Environment:
         size=None,
         with_social_binding=False,
         sampling_time=None,
-    ) -> dict[any, list[Group]]:
+    ) -> dict[any, list[Group]]:    
+        """Get the groups of the environment grouped by a given value
+
+        Parameters
+        ----------
+        group_by_value : any, the value to group the groups by. It should be a property of the Group class. 
+        size : int, optional, if not None, only groups with the given size are returned.
+        ped_thresholds : list of float, optional, list of thresholds to apply to the pedestrians of the groups. If empty, no threshold is applied.
+        group_thresholds : list of float, optional, list of thresholds to apply to the groups. If empty, no threshold is applied.
+        days : list of int, optional, list of days to get the groups from. If empty, all days are used.
+        with_social_binding : bool, optional, if True, only groups with social binding are returned.
+        sampling_time : float, optional, if not None, the trajectories are resampled with the given sampling time.
+
+        Returns
+        -------
+        dict of list of Group, the groups of the environment grouped by the given value
+        
+        """
 
         groups = self.get_groups(
             days,
