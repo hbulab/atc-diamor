@@ -80,6 +80,8 @@ def get_trajectory_at_times(trajectory: np.ndarray, times: np.ndarray) -> np.nda
     times_traj = trajectory[:, 0]
     times_in_times_traj = np.isin(times, times_traj)
     times_traj_in_times = np.isin(times_traj, times)
+
+    
     trajectory_at_times[times_in_times_traj] = trajectory[times_traj_in_times]
 
     return trajectory_at_times
@@ -829,6 +831,64 @@ def compute_maximum_lateral_deviation_using_vel(
 
         max_distance = np.max(distances_to_straight_line)
         return max_distance
+
+
+def compute_maximum_lateral_deviation_using_vel_2(
+    traj: np.ndarray,
+    n_average=3,
+    interpolate: bool = False,
+) -> dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray, "start_vel": np.ndarray]:
+    """Computes the maximum lateral deviation over the trajectory (the maximum distance from points of the trajectories to the line joining the first and last point of the trajectory).
+
+    Parameters
+    ----------
+    traj : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to average the velocity over, by default 3
+    interpolate : bool, optional
+        Whether or not to interpolate the velocity, by default False
+
+    Returns
+    -------
+    dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray]
+        The value for the maximum lateral deviation and the position of the point where it occurs
+    """
+    dict_return = {"max_lateral_deviation": 0, "position of max lateral deviation": np.array([0, 0, 0, 0, 0, 0 ,0]), "start_vel": np.array([0, 0])}
+
+    pos = traj[:, 1:3]
+    vel = traj[:, 5:7]
+    delta_ts = (traj[1:, 0] - traj[:-1, 0]) / 1000
+
+    start_point = pos[0]
+    middle_points = pos[1:]
+
+    start_vel = np.nanmean(traj[:n_average, 5:7], axis=0)
+
+    if not interpolate:
+        distances_to_straight_line = np.abs(
+            cross(start_vel, middle_points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        dict_return["max_lateral_deviation"] = max_distance
+        dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line)+1, :]
+        dict_return["start_vel"] = start_vel
+        return dict_return
+
+    else:
+        # position after half time step, extrapolating velocity
+        extr_pos = pos[:-1] + delta_ts[:, None] / 2 * vel[:-1]
+        points = np.concatenate((middle_points, extr_pos))
+        distances_to_straight_line = np.abs(
+            cross(start_vel, points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        dict_return["max_lateral_deviation"] = max_distance
+        dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line), :]
+        dict_return["start_vel"] = start_vel
+        return dict_return
 
 
 def compute_net_displacement(position: np.ndarray) -> float:

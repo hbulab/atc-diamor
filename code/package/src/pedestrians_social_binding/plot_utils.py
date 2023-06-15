@@ -188,6 +188,9 @@ def plot_static_2D_trajectories(
         Whether or not the image should be displayed, by default True
     save_path : str, optional
          The path to the file where the image will be saved, by default None
+    ax : matplotlib.axes.Axes, optional
+        The axes on which the trajectories should be plotted, by default None
+    
     """
     n_traj = len(trajectories)
 
