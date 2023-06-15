@@ -9,7 +9,7 @@ Clone the repository and install the provided `pedestrians-social-binding` packa
 ```{bash}
 git clone git@github.com:Chevrefeuille/atc-diamor-pedestrians.git
 cd atc-diamor-pedestrian/code
-pip install package
+pip install -e ./package
 ```
 
 You can verify that the package was correctly installed by running any of the example code files in the `code` directory (for instance `00_example_plot_trajectories.py`).
