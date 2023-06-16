@@ -745,6 +745,83 @@ def compute_continuous_sub_trajectories(
 
     return sub_trajectories
 
+def compute_continuous_sub_trajectories_using_time(trajectory: np.ndarray, max_gap: int = 2000
+) -> list[np.ndarray]:
+    """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
+    gaps of max_gap
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    max_gap : int, optional
+        The maximum temporal gap allowed in a trajectory, by default 2000
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
+    """
+
+    t = trajectory[:, 0]
+    delta_t = t[1:] - t[:-1]
+
+    jumps_indices = np.where(delta_t > max_gap)[0]
+
+    sub_trajectories = []
+    s = 0
+    for j in jumps_indices:
+        sub_trajectories += [trajectory[s : j + 1, :]]
+        s = j + 1
+    if s < len(t):
+        sub_trajectories += [trajectory[s:, :]]
+
+    return sub_trajectories
+
+def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> list[np.ndarray]:
+    """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
+    gaps of max_gap
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    max_gap : int, optional
+        The maximum temporal gap allowed in a trajectory, by default 2000
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
+    """
+
+    s = 0
+
+    sub_sub_trajectories = []
+    break_trigger = False
+
+
+    for s in range(len(trajectory)):
+        for i in range(s+1,len(trajectory)):
+            break_trigger = False
+            delta = trajectory[i, 1:3] - trajectory[s, 1:3]
+            for diff in delta:
+                distance = np.sqrt(np.sum(delta**2))
+                if distance > max_distance:
+                    if i - s >= min_length:
+                        sub_sub_trajectories += [trajectory[s:i, :]]
+                        break_trigger = True
+                        break
+            if break_trigger:
+                break
+
+    if(len(sub_sub_trajectories) == 0):
+        return None
+
+    return sub_sub_trajectories
+
+
+
 
 def compute_maximum_lateral_deviation(
     position: np.ndarray, scaled: bool = True
