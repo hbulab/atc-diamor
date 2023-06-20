@@ -12,6 +12,7 @@ from pedestrians_social_binding.parameters import *
 import numpy as np
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
+from typing import List
 
 
 cross = lambda x, y, axis=None: np.cross(x, y, axis=axis)  # annotation bug
@@ -778,7 +779,7 @@ def compute_continuous_sub_trajectories_using_time(trajectory: np.ndarray, max_g
 
     return sub_trajectories
 
-def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> list[np.ndarray]:
+def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> List[List[np.ndarray], List[float]]:
     """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
     gaps of max_gap
 
@@ -799,6 +800,7 @@ def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, m
 
     sub_sub_trajectories = []
     break_trigger = False
+    liste_of_length = []
 
 
     for s in range(len(trajectory)):
@@ -810,6 +812,7 @@ def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, m
                 if distance > max_distance:
                     if i - s >= min_length:
                         sub_sub_trajectories += [trajectory[s:i, :]]
+                        liste_of_length += [distance]
                         break_trigger = True
                         break
             if break_trigger:
@@ -818,7 +821,7 @@ def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, m
     if(len(sub_sub_trajectories) == 0):
         return None
 
-    return sub_sub_trajectories
+    return sub_sub_trajectories, liste_of_length
 
 
 
@@ -914,7 +917,8 @@ def compute_maximum_lateral_deviation_using_vel_2(
     traj: np.ndarray,
     n_average=3,
     interpolate: bool = False,
-) -> dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray, "start_vel": np.ndarray]:
+    length: float = None,
+) -> dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray, "start_vel": np.ndarray, "length_of_trajectory": float]:
     """Computes the maximum lateral deviation over the trajectory (the maximum distance from points of the trajectories to the line joining the first and last point of the trajectory).
 
     Parameters
@@ -931,7 +935,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
     dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray]
         The value for the maximum lateral deviation and the position of the point where it occurs
     """
-    dict_return = {"max_lateral_deviation": 0, "position of max lateral deviation": np.array([0, 0, 0, 0, 0, 0 ,0]), "start_vel": np.array([0, 0])}
+    dict_return = {"max_lateral_deviation": 0, "position of max lateral deviation": np.array([0, 0, 0, 0, 0, 0 ,0]), "start_vel": np.array([0, 0]), "length_of_trajectory": 0}
 
     pos = traj[:, 1:3]
     vel = traj[:, 5:7]
@@ -951,6 +955,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
         dict_return["max_lateral_deviation"] = max_distance
         dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line)+1, :]
         dict_return["start_vel"] = start_vel
+        dict_return["length_of_trajectory"] = length
         return dict_return
 
     else:
@@ -965,6 +970,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
         dict_return["max_lateral_deviation"] = max_distance
         dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line), :]
         dict_return["start_vel"] = start_vel
+        dict_return["length_of_trajectory"] = length
         return dict_return
 
 
