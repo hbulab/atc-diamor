@@ -918,7 +918,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
     n_average=3,
     interpolate: bool = False,
     length: float = None,
-) -> dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray, "start_vel": np.ndarray, "length_of_trajectory": float]:
+) -> dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray, "mean_velocity": np.ndarray, "length_of_trajectory": float]:
     """Computes the maximum lateral deviation over the trajectory (the maximum distance from points of the trajectories to the line joining the first and last point of the trajectory).
 
     Parameters
@@ -935,7 +935,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
     dict["max_lateral_deviation": float, "position of max lateral deviation": np.ndarray]
         The value for the maximum lateral deviation and the position of the point where it occurs
     """
-    dict_return = {"max_lateral_deviation": 0, "position of max lateral deviation": np.array([0, 0, 0, 0, 0, 0 ,0]), "start_vel": np.array([0, 0]), "length_of_trajectory": 0}
+    dict_return = {"max_lateral_deviation": 0, "position of max lateral deviation": np.array([0, 0, 0, 0, 0, 0 ,0]), "mean_velocity": np.array([0, 0]), "length_of_trajectory": 0}
 
     pos = traj[:, 1:3]
     vel = traj[:, 5:7]
@@ -954,7 +954,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
         max_distance = np.max(distances_to_straight_line)
         dict_return["max_lateral_deviation"] = max_distance
         dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line)+1, :]
-        dict_return["start_vel"] = start_vel
+        dict_return["mean_velocity"] = start_vel
         dict_return["length_of_trajectory"] = length
         return dict_return
 
@@ -969,7 +969,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
         max_distance = np.max(distances_to_straight_line)
         dict_return["max_lateral_deviation"] = max_distance
         dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line), :]
-        dict_return["start_vel"] = start_vel
+        dict_return["mean_velocity"] = start_vel
         dict_return["length_of_trajectory"] = length
         return dict_return
 
@@ -1855,3 +1855,26 @@ def compute_not_alone_encounters(
             not_alone_encounters += [pedestrian_A]
 
     return not_alone_encounters
+
+
+def compute_length(
+        trajectory: np.ndarray,
+)-> float:
+    """Compute the length of a trajectory.
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The length of the trajectory
+    """
+    list_length = []
+    for i in range(len(trajectory)-1):
+        diff = trajectory[i + 1, 1:3] - trajectory[i, 1:3]
+        list_length += [np.sqrt(np.sum(diff ** 2))]
+    return np.sum(list_length)
+        

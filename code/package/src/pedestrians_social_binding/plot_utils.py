@@ -381,3 +381,83 @@ def plot_animated_2D_trajectories(
             writer="imagemagick",
             fps=100,
         )
+
+def plot_baseline(trajectory: np.ndarray, 
+                  max_dev , 
+                  soc_binding: str, 
+                  group: bool, 
+                  id: int = None, 
+                  boundaries: dict = None,
+                    colors: list[str] = None,
+                    n_average: int = 4,
+                    ax = None,
+                    fig = None,
+                    show: bool = True,
+):
+
+    """ This function plots the baseline trajectory of a pedestrian.
+
+    Parameters
+    ----------
+    trajectory : np.array
+        The trajectory of the pedestrian.
+    max_dev : dict
+        A dictionary containing the maximum lateral deviation of the pedestrian.
+        The dictionary has the following structure:
+            - max_dev["max lateral deviation"] = max_deviation
+            - max_dev["position of max lateral deviation"] = [time, x, y]  
+            - max_dev["start_vel"] = [x, y]
+    soc_binding : str
+        The social binding of the pedestrian.
+    group : bool
+        True if the pedestrian is in a group, False otherwise.
+    id : int
+        The id of the pedestrian or the group.
+    """
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+
+    point_of_max_deviation = max_dev["position of max lateral deviation"]
+    start_vel = np.nanmean(trajectory[:n_average, 5:7], axis=0)
+    x_start_plot = trajectory[0,1]
+    y_start_plot = trajectory[0,2]
+    x_end_plot = start_vel[0] * 1000 + x_start_plot
+    y_end_plot = start_vel[1] * 1000 + y_start_plot
+
+    vel_perpandicular = np.array([start_vel[1], -start_vel[0]])
+    x_start_perp_plot = point_of_max_deviation[1]
+    y_start_perp_plot = point_of_max_deviation[2]
+    x_end_perp_plot = vel_perpandicular[0] * 1000 + x_start_perp_plot
+    y_end_perp_plot = vel_perpandicular[1] * 1000 + y_start_perp_plot
+    x_second_end_perp_plot = -vel_perpandicular[0] * 1000 + x_start_perp_plot
+    y_second_end_perp_plot = -vel_perpandicular[1] * 1000 + y_start_perp_plot
+
+
+    # plot the trajectory
+    if (group):
+        if(soc_binding == "other") :
+            color = "pink"
+        else:
+            color = colors[soc_binding]
+    else:
+        color = "blue"
+    ax.set_xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
+    ax.set_ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
+    ax.scatter(trajectory[:,1] / 1000,trajectory[:,2] / 1000, s=10, c=color)
+    ax.scatter(point_of_max_deviation[1] / 1000, point_of_max_deviation[2] / 1000, s=10, c="black")
+    ax.set_aspect("equal", "box")
+    ax.plot([x_start_plot / 1000, x_end_plot / 1000], [y_start_plot / 1000, y_end_plot / 1000], c="purple", label="velocity")
+    ax.set_xlabel('X Coord', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Y Coord', fontsize=12, fontweight='bold')
+    if(group):
+        ax.set_title('Plot of the baseline for group ' + str(id))
+    else:
+        ax.set_title('Plot of the baseline for non group pedestrian ' + str(id))
+    ax.plot([x_end_perp_plot / 1000, x_second_end_perp_plot / 1000], [y_end_perp_plot / 1000, y_second_end_perp_plot/1000]
+                , c="green", label="perpendicular of the vector of velocity")
+    ax.legend()
+
+    if(show) :
+        plt.show()
+    else :
+        return fig,ax
