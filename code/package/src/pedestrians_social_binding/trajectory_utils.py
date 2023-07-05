@@ -779,6 +779,9 @@ def compute_continuous_sub_trajectories_using_time(trajectory: np.ndarray, max_g
 
     return sub_trajectories
 
+
+
+
 def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> List[List[np.ndarray], List[float]]:
     """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
     gaps of max_gap
@@ -799,29 +802,63 @@ def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, m
     s = 0
 
     sub_sub_trajectories = []
-    break_trigger = False
     liste_of_length = []
 
 
     for s in range(len(trajectory)):
         for i in range(s+1,len(trajectory)):
-            break_trigger = False
             delta = trajectory[i, 1:3] - trajectory[s, 1:3]
-            for diff in delta:
-                distance = np.sqrt(np.sum(delta**2))
-                if distance > max_distance:
-                    if i - s >= min_length:
-                        sub_sub_trajectories += [trajectory[s:i, :]]
-                        liste_of_length += [distance]
-                        break_trigger = True
-                        break
-            if break_trigger:
-                break
+            distance = np.sqrt(np.sum(delta**2))
+            if distance >= max_distance:
+                if i - s >= min_length:
+                    sub_sub_trajectories += [trajectory[s:i, :]]
+                    liste_of_length += [distance]
+                    break
+
 
     if(len(sub_sub_trajectories) == 0):
         return None
 
     return sub_sub_trajectories, liste_of_length
+
+
+def compute_continuous_sub_trajectories_using_distance_v2(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> List[List[np.ndarray], List[float]]:
+    """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
+    gaps of max_gap
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    max_gap : int, optional
+        The maximum temporal gap allowed in a trajectory, by default 2000
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
+    """
+
+    s = 0
+
+    sub_sub_trajectories = []
+    liste_of_length = []
+
+
+    for s in range(0,len(trajectory),min_length):
+        if (s + min_length >= len(trajectory)):
+            break
+        delta = trajectory[s+min_length, 1:3] - trajectory[s, 1:3]
+        distance = np.sqrt(np.sum(delta**2))
+
+        sub_sub_trajectories += [trajectory[s:s+min_length, :]]
+        liste_of_length += [distance]
+
+    if(len(sub_sub_trajectories) == 0):
+        return None
+
+    return sub_sub_trajectories, liste_of_length
+
 
 
 

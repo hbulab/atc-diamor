@@ -446,15 +446,15 @@ def plot_baseline(trajectory: np.ndarray,
     ax.scatter(trajectory[:,1] / 1000,trajectory[:,2] / 1000, s=10, c=color)
     ax.scatter(point_of_max_deviation[1] / 1000, point_of_max_deviation[2] / 1000, s=10, c="black")
     ax.set_aspect("equal", "box")
-    ax.plot([x_start_plot / 1000, x_end_plot / 1000], [y_start_plot / 1000, y_end_plot / 1000], c="purple", label="velocity")
+    ax.plot([x_start_plot / 1000, x_end_plot / 1000], [y_start_plot / 1000, y_end_plot / 1000], c="purple", label="velocity vector")
     ax.set_xlabel('X Coord', fontsize=12, fontweight='bold')
     ax.set_ylabel('Y Coord', fontsize=12, fontweight='bold')
     if(group):
-        ax.set_title('Plot of the baseline for group ' + str(id))
+        ax.set_title('Plot of the baseline for group number : ' + str(id))
     else:
         ax.set_title('Plot of the baseline for non group pedestrian ' + str(id))
     ax.plot([x_end_perp_plot / 1000, x_second_end_perp_plot / 1000], [y_end_perp_plot / 1000, y_second_end_perp_plot/1000]
-                , c="green", label="perpendicular of the vector of velocity")
+                , c="green", label="perpendicular of the velocity vector")
     ax.legend()
 
     if(show) :
