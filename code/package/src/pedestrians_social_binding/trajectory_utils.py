@@ -823,21 +823,7 @@ def compute_continuous_sub_trajectories_using_distance(trajectory: np.ndarray, m
 
 
 def compute_continuous_sub_trajectories_using_distance_v2(trajectory: np.ndarray, max_distance: int = 5000, min_length: int=5) -> List[List[np.ndarray], List[float]]:
-    """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
-    gaps of max_gap
 
-    Parameters
-    ----------
-    trajectory : np.ndarray
-        A trajectory
-    max_gap : int, optional
-        The maximum temporal gap allowed in a trajectory, by default 2000
-
-    Returns
-    -------
-    list[np.ndarray]
-        The list of continuous sub-trajectories (i.e. with no gap larger than max_gap)
-    """
 
     s = 0
 
