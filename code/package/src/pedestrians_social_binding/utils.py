@@ -43,7 +43,7 @@ def write_table(data : list, label : list):
         for j in range(i+1, len(data)):
             t_statistic[i,j] = stats.ttest_ind(line, data[j])[1]
             t_statistic[j,i] = None
-            cohen_data[i,j] = compute_cohen_d(line, data[j])
+            cohen_data[i,j] = np.abs(compute_cohen_d(line, data[j]))
             cohen_data[j,i] = None
 
     final_data_stat = {"Labels / Data ": label,

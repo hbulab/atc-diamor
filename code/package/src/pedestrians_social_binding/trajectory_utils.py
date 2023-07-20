@@ -1151,6 +1151,15 @@ def rediscretize_position(position: np.ndarray) -> np.ndarray:
     return np.array(rediscretized_position)
 
 
+
+def compute_curvature(trajectory: np.ndarray) -> int:
+
+    v = trajectory[1:, :] - trajectory[:-1, :]
+    a = v[1:, :] - v[:-1, :]
+    a = a / 100
+    k = np.cross(v[1:, :], a, axis=1) / np.linalg.norm(v[1:, :], axis=1) ** 3
+    return np.abs(k)
+
 def compute_sinuosity(position: np.ndarray) -> float:
     """Computes the sinuosity of the trajectory. Sinuosity is defined as 1.18 * s/q where
     s is the standard deviation of the turning angles of the trajectory and q is the step size
