@@ -67,3 +67,5 @@ ALL_DEFLECTION_MEASURES = [
 
 SOCIAL_BINDING = {"atc": "soc_rel", "diamor": "interaction"}
 
+SAMPLING_NUMBER = 1000
+

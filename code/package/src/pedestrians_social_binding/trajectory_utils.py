@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from scipy.interpolate import CubicSpline
+
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
     from pedestrians_social_binding.group import Group
@@ -1152,9 +1154,74 @@ def rediscretize_position(position: np.ndarray) -> np.ndarray:
 
 
 
-def compute_curvature(trajectory: np.ndarray) -> int:
+def compute_curvature(trajectory: np.ndarray) -> list[int]:
 
     v = trajectory[1:, :] - trajectory[:-1, :]
+    a = v[1:, :] - v[:-1, :]
+    a = a / 100
+    k = np.cross(v[1:, :], a, axis=1) / np.linalg.norm(v[1:, :], axis=1) ** 3
+    return np.abs(k)
+
+
+def compute_curvature_v3(trajectory: np.ndarray) -> list[int]:
+    NUMBER_OF_POINTS = SAMPLING_NUMBER
+    new_trajectory = np.ndarray(shape=(NUMBER_OF_POINTS, 7))
+
+    cs = CubicSpline(trajectory[:, 0], trajectory[:, 1:3])
+    dcs = cs.derivative()
+    ddcs = dcs.derivative()
+    v = np.ndarray(shape=(NUMBER_OF_POINTS, 2))
+    a = np.ndarray(shape=(NUMBER_OF_POINTS, 2))
+
+    for i,time in enumerate(np.linspace(trajectory[0, 0], trajectory[-1, 0], NUMBER_OF_POINTS)):
+        vel = dcs(time)
+        v[i] = vel
+        acc = ddcs(time)
+        a[i] = acc /100
+        speed = np.linalg.norm(vel)
+        new_trajectory[i] = np.concatenate(([time], cs(time), [0] , [speed], vel))
+
+    k = np.cross(v, a, axis=1) / np.linalg.norm(v, axis=1) ** 3
+    return np.abs(k)
+
+
+def compute_curvature_v2(trajectory: np.ndarray) -> list[int]:
+    pos = trajectory[:, 1:3]
+    vel = trajectory[:, 5:7]
+    delta_ts = (trajectory[1:, 0] - trajectory[:-1, 0]) / 1000
+
+    extr_time = trajectory[:-1, 0] + delta_ts / 2
+    extr_pos = pos[:-1] + delta_ts[:, None] / 2 * vel[:-1]
+    extr_vel = vel[:-1] + delta_ts[:, None] / 2 * (vel[1:] - vel[:-1])
+    extr_speed = np.linalg.norm(extr_vel, axis=1)
+
+    # print("extr_time",np.shape(extr_time))
+    # print("extr_pos",np.shape(extr_pos))
+    extr_point = np.concatenate((extr_time[:,None], extr_pos), axis=1)
+    # print(type(extr_point))
+    # print("extra_point",np.shape(extr_point))
+    extr_point = np.concatenate((extr_point, np.zeros((len(extr_point), 1))), axis=1)
+    # print("extra_point1",np.shape(extr_point))
+    extr_point = np.concatenate((extr_point, extr_speed[:, None]), axis=1)
+    # print("extra_point2",np.shape(extr_point))
+    extr_point = np.concatenate((extr_point, extr_vel), axis=1)
+    # print("extra_point3",np.shape(extr_point))
+
+
+    new_trajectory = np.ndarray(shape=(len(trajectory)+len(extr_point), 7))
+
+    count = 0
+    for i,traj in enumerate(trajectory):
+        new_trajectory[count] = traj
+        count += 1
+        if i < len(trajectory)-1:
+            new_trajectory[count] = extr_point[i]
+            count += 1
+    
+    # print("trajectory", (trajectory[1:, 0] + trajectory[:-1, 1:3])/2)
+    # print("new_traj", new_trajectory[:, 0])
+
+    v = new_trajectory[:, 5:7]
     a = v[1:, :] - v[:-1, :]
     a = a / 100
     k = np.cross(v[1:, :], a, axis=1) / np.linalg.norm(v[1:, :], axis=1) ** 3
