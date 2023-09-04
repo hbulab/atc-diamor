@@ -455,7 +455,6 @@ def plot_baseline(trajectory: np.ndarray,
         ax.set_title('Plot of the baseline for non group pedestrian ' + str(id))
     ax.plot([x_end_perp_plot / 1000, x_second_end_perp_plot / 1000], [y_end_perp_plot / 1000, y_second_end_perp_plot/1000]
                 , c="green", label="perpendicular of the velocity vector")
-    ax.legend()
 
     if(show) :
         plt.show()

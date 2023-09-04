@@ -976,7 +976,7 @@ def compute_maximum_lateral_deviation_using_vel_2(
             cross(start_vel, middle_points - start_point)
         ) / np.linalg.norm(start_vel)
 
-        max_distance = np.sum(distances_to_straight_line)
+        max_distance = np.max(distances_to_straight_line)
         dict_return["max_lateral_deviation"] = max_distance
         dict_return["position of max lateral deviation"] = traj[np.argmax(distances_to_straight_line)+1, :]
         dict_return["mean_velocity"] = start_vel
