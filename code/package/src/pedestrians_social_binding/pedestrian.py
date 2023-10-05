@@ -27,6 +27,7 @@ class Pedestrian:
     groups : list of Group, the groups the pedestrian is part of
 
     """
+
     def __init__(self, ped_id, env, day, trajectory, groups):
         self.ped_id = ped_id
         # trajectory is a numpy array with one line for each data point
@@ -40,43 +41,35 @@ class Pedestrian:
         self.last_obs = trajectory[-1, 0] if len(trajectory) else -1
 
     def __str__(self):
-        """String representation of the pedestrian
-        """
+        """String representation of the pedestrian"""
         return f"Pedestrian({self.ped_id})"
 
     def __repr__(self):
-        """String representation of the pedestrian
-        """
+        """String representation of the pedestrian"""
         return f"Pedestrian({self.ped_id})"
 
     def get_id(self) -> int:
-        """Get the pedestrian id
-        """
+        """Get the pedestrian id"""
         return self.ped_id
 
     def get_trajectory(self):
-        """Get the pedestrian trajectory
-        """
+        """Get the pedestrian trajectory"""
         return self.trajectory
 
     def get_time(self):
-        """Get the pedestrian time
-        """
+        """Get the pedestrian time"""
         return self.trajectory[:, 0]
 
     def set_trajectory(self, trajectory):
-        """Set the pedestrian trajectory
-        """
+        """Set the pedestrian trajectory"""
         self.trajectory = trajectory
 
     def get_first_obs(self):
-        """Get the first observation of the pedestrian
-        """
+        """Get the first observation of the pedestrian"""
         return self.first_obs
 
     def get_last_obs(self):
-        """Get the last observation of the pedestrian
-        """
+        """Get the last observation of the pedestrian"""
         return self.last_obs
 
     def get_trajectory_column(self, value):
@@ -97,8 +90,7 @@ class Pedestrian:
         return self.trajectory[:, TRAJECTORY_COLUMNS[value]]
 
     def get_position(self):
-        """Get the pedestrian position
-        """
+        """Get the pedestrian position"""
         return self.trajectory[:, 1:3]
 
     def shares_observations_with(self, pedestrian):
@@ -132,7 +124,7 @@ class Pedestrian:
         proximity_threshold : int, the proximity threshold to use
         skip : list of int, the pedestrians to skip
         alone : bool, whether to get alone or not alone encounters
-        
+
         Returns
         -------
         list of Pedestrian, the encountered pedestrians
@@ -172,12 +164,14 @@ class Pedestrian:
 
     def plot_2D_trajectory(
         self,
+        ax=None,
         scale=True,
         animate=False,
         show=True,
         save_path=None,
         loop=False,
-    ):  
+        gradient=False,
+    ):
         """Plot the pedestrian trajectory
 
         Parameters
@@ -199,6 +193,7 @@ class Pedestrian:
         if animate:
             plot_animated_2D_trajectory(
                 trajectory,
+                ax=ax,
                 title=f"Trajectory for {self.ped_id}",
                 boundaries=boundaries,
                 show=show,
@@ -208,10 +203,12 @@ class Pedestrian:
         else:
             plot_static_2D_trajectory(
                 trajectory,
+                ax=ax,
                 title=f"Trajectory for {self.ped_id}",
                 boundaries=boundaries,
                 show=show,
                 save_path=save_path,
+                gradient=gradient,
             )
 
     def get_undisturbed_trajectory(self, proximity_threshold, pedestrians, skip=[]):

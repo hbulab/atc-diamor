@@ -14,6 +14,7 @@ def plot_static_2D_trajectory(
     show: bool = True,
     save_path: str = None,
     ax: matplotlib.axes.Axes = None,
+    gradient: bool = False,
 ):
     """Plot the trajectory of a pedestrian, as an image
 
@@ -25,13 +26,20 @@ def plot_static_2D_trajectory(
     show : bool, optional. Whether or not the image should be displayed, by default True
     save_path : str, optional. The path to the file where the image will be saved, by default None
     ax : matplotlib.axes.Axes, optional, by default None
+    gradient: bool, whether to show a gradient of color with time
     """
 
     if not ax:
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
 
     x, y = trajectory[:, 1] / 1000, trajectory[:, 2] / 1000
-    ax.scatter(x, y, c="cornflowerblue", s=10)
+
+    if gradient:
+        t = trajectory[:, 0]
+        alpha = (t - t.min()) / (t.max() - t.min())
+    else:
+        alpha = 1
+    ax.scatter(x, y, c="cornflowerblue", s=10, alpha=alpha)
 
     if vel:
         vx, vy = trajectory[:, 5] / 1000, trajectory[:, 6] / 1000
@@ -56,6 +64,7 @@ def plot_static_2D_trajectory(
 
 def plot_animated_2D_trajectory(
     trajectory: np.ndarray,
+    ax: matplotlib.axes.Axes = None,
     title: str = None,
     vel: bool = False,
     colors: list[str] = None,
@@ -71,6 +80,8 @@ def plot_animated_2D_trajectory(
     ----------
     trajectory : np.ndarray
         A trajectory
+    ax : matplotlib.axes.Axes, optional
+        The axes on which the trajectory should be plotted, by default None
     title : str, optional
         A title for the animation, by default None
     vel : bool, optional
@@ -93,7 +104,8 @@ def plot_animated_2D_trajectory(
     if colors is None:
         colors = ["cornflowerblue"] * len(position)
 
-    fig, ax = plt.subplots()
+    if not ax:
+        fig, ax = plt.subplots()
     ax.scatter([], [], c=[])  # plot of x and y in time
 
     if boundaries:
@@ -164,6 +176,7 @@ def plot_static_2D_trajectories(
     show: bool = True,
     save_path: str = None,
     ax: matplotlib.axes.Axes = None,
+    gradient: bool = False,
 ):
     """Plot the trajectories of a set of pedestrians
 
@@ -190,7 +203,7 @@ def plot_static_2D_trajectories(
          The path to the file where the image will be saved, by default None
     ax : matplotlib.axes.Axes, optional
         The axes on which the trajectories should be plotted, by default None
-    
+
     """
     n_traj = len(trajectories)
 
@@ -213,8 +226,12 @@ def plot_static_2D_trajectories(
 
     for label, trajectory, color in zip(zip_labels, trajectories, colors):
         x, y = trajectory[:, 1], trajectory[:, 2]
-        alphas = np.linspace(0, 1, len(x))
-        ax.scatter(x / 1000, y / 1000, c=color, alpha=alphas, s=10, label=label)
+        if gradient:
+            t = trajectory[:, 0]
+            alpha = (t - t.min()) / (t.max() - t.min())
+        else:
+            alpha = 1
+        ax.scatter(x / 1000, y / 1000, c=color, alpha=alpha, s=10, label=label)
 
         if show_direction:
             middle = len(trajectory) // 2
@@ -382,20 +399,21 @@ def plot_animated_2D_trajectories(
             fps=100,
         )
 
-def plot_baseline(trajectory: np.ndarray, 
-                  max_dev , 
-                  soc_binding: str, 
-                  group: bool, 
-                  id: int = None, 
-                  boundaries: dict = None,
-                    colors: list[str] = None,
-                    n_average: int = 4,
-                    ax = None,
-                    fig = None,
-                    show: bool = True,
-):
 
-    """ This function plots the baseline trajectory of a pedestrian.
+def plot_baseline(
+    trajectory: np.ndarray,
+    max_dev,
+    soc_binding: str,
+    group: bool,
+    id: int = None,
+    boundaries: dict = None,
+    colors: list[str] = None,
+    n_average: int = 4,
+    ax=None,
+    fig=None,
+    show: bool = True,
+):
+    """This function plots the baseline trajectory of a pedestrian.
 
     Parameters
     ----------
@@ -405,7 +423,7 @@ def plot_baseline(trajectory: np.ndarray,
         A dictionary containing the maximum lateral deviation of the pedestrian.
         The dictionary has the following structure:
             - max_dev["max lateral deviation"] = max_deviation
-            - max_dev["position of max lateral deviation"] = [time, x, y]  
+            - max_dev["position of max lateral deviation"] = [time, x, y]
             - max_dev["start_vel"] = [x, y]
     soc_binding : str
         The social binding of the pedestrian.
@@ -419,8 +437,8 @@ def plot_baseline(trajectory: np.ndarray,
 
     point_of_max_deviation = max_dev["position of max lateral deviation"]
     start_vel = np.nanmean(trajectory[:n_average, 5:7], axis=0)
-    x_start_plot = trajectory[0,1]
-    y_start_plot = trajectory[0,2]
+    x_start_plot = trajectory[0, 1]
+    y_start_plot = trajectory[0, 2]
     x_end_plot = start_vel[0] * 1000 + x_start_plot
     y_end_plot = start_vel[1] * 1000 + y_start_plot
 
@@ -432,10 +450,9 @@ def plot_baseline(trajectory: np.ndarray,
     x_second_end_perp_plot = -vel_perpandicular[0] * 1000 + x_start_perp_plot
     y_second_end_perp_plot = -vel_perpandicular[1] * 1000 + y_start_perp_plot
 
-
     # plot the trajectory
-    if (group):
-        if(soc_binding == "other") :
+    if group:
+        if soc_binding == "other":
             color = "pink"
         else:
             color = colors[soc_binding]
@@ -443,20 +460,34 @@ def plot_baseline(trajectory: np.ndarray,
         color = "blue"
     ax.set_xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
     ax.set_ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
-    ax.scatter(trajectory[:,1] / 1000,trajectory[:,2] / 1000, s=10, c=color)
-    ax.scatter(point_of_max_deviation[1] / 1000, point_of_max_deviation[2] / 1000, s=10, c="black")
+    ax.scatter(trajectory[:, 1] / 1000, trajectory[:, 2] / 1000, s=10, c=color)
+    ax.scatter(
+        point_of_max_deviation[1] / 1000,
+        point_of_max_deviation[2] / 1000,
+        s=10,
+        c="black",
+    )
     ax.set_aspect("equal", "box")
-    ax.plot([x_start_plot / 1000, x_end_plot / 1000], [y_start_plot / 1000, y_end_plot / 1000], c="purple", label="velocity vector")
-    ax.set_xlabel('X Coord', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Y Coord', fontsize=12, fontweight='bold')
-    if(group):
-        ax.set_title('Plot of the baseline for group number : ' + str(id))
+    ax.plot(
+        [x_start_plot / 1000, x_end_plot / 1000],
+        [y_start_plot / 1000, y_end_plot / 1000],
+        c="purple",
+        label="velocity vector",
+    )
+    ax.set_xlabel("X Coord", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Y Coord", fontsize=12, fontweight="bold")
+    if group:
+        ax.set_title("Plot of the baseline for group number : " + str(id))
     else:
-        ax.set_title('Plot of the baseline for non group pedestrian ' + str(id))
-    ax.plot([x_end_perp_plot / 1000, x_second_end_perp_plot / 1000], [y_end_perp_plot / 1000, y_second_end_perp_plot/1000]
-                , c="green", label="perpendicular of the velocity vector")
+        ax.set_title("Plot of the baseline for non group pedestrian " + str(id))
+    ax.plot(
+        [x_end_perp_plot / 1000, x_second_end_perp_plot / 1000],
+        [y_end_perp_plot / 1000, y_second_end_perp_plot / 1000],
+        c="green",
+        label="perpendicular of the velocity vector",
+    )
 
-    if(show) :
+    if show:
         plt.show()
-    else :
-        return fig,ax
+    else:
+        return fig, ax
