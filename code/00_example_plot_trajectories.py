@@ -1,7 +1,6 @@
 from package.src.pedestrians_social_binding.environment import Environment
 
 if __name__ == "__main__":
-
     # -------- ATC --------
     atc = Environment("atc", data_dir="../data/formatted")
 
@@ -26,9 +25,8 @@ if __name__ == "__main__":
         pedestrian.plot_2D_trajectory(animate=False, scale=False)
 
     # -------- DIAMOR --------
-    diamor = Environment("diamor", data_dir="../data/formatted")
+    diamor = Environment("diamor", data_dir="../data/formatted", raw=True)
     pedestrians = diamor.get_pedestrians(days=["06"])
 
     for pedestrian in pedestrians[:3]:
-
         pedestrian.plot_2D_trajectory(animate=True, scale=True)

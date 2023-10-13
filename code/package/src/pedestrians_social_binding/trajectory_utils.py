@@ -15,6 +15,7 @@ from pedestrians_social_binding.parameters import *
 import numpy as np
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from typing import List
 
 
@@ -750,7 +751,7 @@ def compute_continuous_sub_trajectories(
 
 
 def compute_continuous_sub_trajectories_using_time(
-    trajectory: np.ndarray, max_gap: int = 2000
+    trajectory: np.ndarray, max_gap: int = 2
 ) -> list[np.ndarray]:
     """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
     gaps of max_gap
@@ -760,7 +761,7 @@ def compute_continuous_sub_trajectories_using_time(
     trajectory : np.ndarray
         A trajectory
     max_gap : int, optional
-        The maximum temporal gap allowed in a trajectory, by default 2000
+        The maximum temporal gap allowed in a trajectory, by default 2
 
     Returns
     -------
@@ -897,7 +898,7 @@ def compute_maximum_lateral_deviation(
 
 def compute_maximum_lateral_deviation_using_vel(
     traj: np.ndarray,
-    n_average=3,
+    n_average=33,
     plot: bool = False,
     ax: plt.Axes | None = None,
 ) -> tuple[float, int]:
@@ -933,7 +934,9 @@ def compute_maximum_lateral_deviation_using_vel(
 
     max_distance = np.max(distances_to_straight_line)
 
-    if plot and ax is not None:
+    if plot:
+        if ax is None:
+            fig, ax = plt.subplots()
         # show line guided by velocity
         end_line = start_point + start_vel * (
             np.dot(start_vel, (pos[-1] - start_point)) / np.dot(start_vel, start_vel)
@@ -1028,6 +1031,7 @@ def compute_maximum_lateral_deviation_using_all_vel(
             [position_max[1] / 1000, point_on_line_furthest[1] / 1000],
             color="purple",
         )
+        # print("fu")
 
     return max_distance, idx_max
 
@@ -1278,6 +1282,98 @@ def compute_angles(vectors_1: np.ndarray, vectors_2: np.ndarray) -> np.ndarray:
 #         q = step_length
 
 
+def rediscretize_position_v2(position: np.ndarray, step_length: float):
+    """Transforms the trajectory so that the distance between each point is fixed
+
+    Parameters
+    ----------
+    position : np.ndarray
+        A position
+    step_length : float
+        The length of the step
+    """
+
+    rediscretized_position = []
+    current_point = position[0]
+    start_segment, end_segment = position[0], position[1]
+    start_segment_index, end_segment_index = 0, 1
+    rediscretized_position += [current_point]
+    done = False
+    while not done:
+        d_point_goal = np.linalg.norm(end_segment - current_point)
+        if d_point_goal > step_length:  # there is space until the next trajectory point
+            l = step_length / d_point_goal
+            current_point = l * end_segment + (1 - l) * current_point
+            rediscretized_position += [current_point]
+        else:  # no more space, the points needs to be on one of the next segments
+            # find the closest segment that intersects the circle centered on current_point
+            # with radius step_length
+            found_intersection = False
+            while not found_intersection:
+                if end_segment_index == len(position) - 1:  # last point
+                    done = True
+                    break
+                start_segment_index = end_segment_index
+                end_segment_index = start_segment_index + 1
+                start_segment = position[start_segment_index]
+                end_segment = position[end_segment_index]
+                intersection = find_intersection_circle_segment(
+                    current_point,
+                    step_length,
+                    start_segment,
+                    end_segment,
+                )
+                if intersection is not None:
+                    found_intersection = True
+                    current_point = intersection
+                    rediscretized_position += [current_point]
+    return np.array(rediscretized_position)
+
+
+def find_intersection_circle_segment(C, radius, A, B):
+    # plot
+    # fig, ax = plt.subplots()
+    # ax.scatter(C[0], C[1])
+    # ax.scatter(A[0], A[1])
+    # ax.scatter(B[0], B[1])
+    # ax.plot([A[0], B[0]], [A[1], B[1]])
+    # circle = patches.Circle((C[0], C[1]), radius, color="r", fill=False)
+    # ax.add_patch(circle)
+    # ax.axis("equal")
+    # plt.show()
+
+    AC = C - A
+    AB = B - A
+    AB_norm = np.linalg.norm(AB)
+    AC_norm = np.linalg.norm(AC)
+    # (x, y) is on the circle if (x - Cx)^2 + (y - Cy)^2 = radius^2
+    # (x, y) is on the segment if AP = lambda * AB with 0 <= lambda <= 1
+    # solve quadratic equation for lambda
+    a = AB_norm**2
+    b = 2 * np.dot(-AC, AB)
+    c = AC_norm**2 - radius**2
+    delta = b**2 - 4 * a * c
+    if a == 0:
+        if b == 0:
+            return None
+        lambda_1 = -c / b
+        if 0 <= lambda_1 <= 1:
+            return A + lambda_1 * AB
+        else:
+            return None
+    if delta < 0:
+        return None
+    lambda_1 = (-b - delta**0.5) / (2 * a)
+    lambda_2 = (-b + delta**0.5) / (2 * a)
+    # is one of the lambdas between 0 and 1?
+    if 0 <= lambda_1 <= 1:
+        return A + lambda_1 * AB
+    elif 0 <= lambda_2 <= 1:
+        return A + lambda_2 * AB
+    else:
+        return None
+
+
 def rediscretize_position(
     position: np.ndarray, step_length: None | float = None
 ) -> np.ndarray:
@@ -1329,7 +1425,6 @@ def rediscretize_position(
             current_point = next_point
             current_goal = next_goal
             current_goal_index += 1
-
         rediscretized_position += [current_point]
     return np.array(rediscretized_position)
 
@@ -1339,7 +1434,9 @@ def compute_curvature(trajectory: np.ndarray) -> list[int]:
     dp = trajectory[1:, 1:3] - trajectory[:-1, 1:3]
     v = dp / dt[:, None]
     a = v[1:, :] - v[:-1, :] / dt[1:, None]
-    k = np.cross(v[1:, :], a, axis=1) / np.linalg.norm(v[1:, :], axis=1) ** 3
+    v_mag = np.linalg.norm(v[1:, :], axis=1)
+    non_zero = v_mag != 0
+    k = np.cross(v[1:, :], a, axis=1)[non_zero] / v_mag[non_zero] ** 3
     return np.abs(k)
 
 
@@ -1427,7 +1524,13 @@ def compute_sinuosity(position: np.ndarray, step_length: None | float = None) ->
     float
         The value for the sinuosityw
     """
-    rediscretized_position = rediscretize_position(position, step_length=step_length)
+    rediscretized_position = rediscretize_position_v2(position, step_length=step_length)
+    if len(rediscretized_position) <= 1:
+        print(len(rediscretized_position), len(position))
+        plt.scatter(position[:, 0], position[:, 1])
+        plt.scatter(rediscretized_position[:, 0], rediscretized_position[:, 1])
+        plt.show()
+        return None
     step_length = np.linalg.norm(rediscretized_position[1] - rediscretized_position[0])
     turning_angles = compute_turning_angles(rediscretized_position)
     sinuosity = 1.18 * np.std(turning_angles) / step_length**0.5
@@ -1436,7 +1539,6 @@ def compute_sinuosity(position: np.ndarray, step_length: None | float = None) ->
 
 def compute_sinuosity_spline(trajectory: np.ndarray) -> float:
     NUMBER_OF_POINTS = SAMPLING_NUMBER
-    new_trajectory = np.ndarray(shape=(NUMBER_OF_POINTS, 7))
 
     cs = CubicSpline(trajectory[:, 0], trajectory[:, 1:3])
     times = np.linspace(trajectory[0, 0], trajectory[-1, 0], NUMBER_OF_POINTS)
@@ -1540,14 +1642,14 @@ def compute_deflection(
 
 
 def get_pieces(
-    position: np.ndarray, piece_size: int, overlap: bool = False, delta: int = 100
+    trajectory: np.ndarray, piece_size: int, overlap: bool = False, delta: int = 100
 ) -> list[np.ndarray]:
     """Breaks up a trajectory in to pieces of given length
 
     Parameters
     ----------
-    position : np.ndarray
-        A position
+    trajectory : np.ndarray
+        A trajectory
     piece_size : int
         The length of the pieces
     overlap : bool, optional
@@ -1561,6 +1663,7 @@ def get_pieces(
     list[np.ndarray]
         The list of pieces
     """
+    position = trajectory[:, 1:3]
     start = position[0]
     end = position[1]
 
@@ -1577,7 +1680,7 @@ def get_pieces(
         current_min = end
 
         # get the trajectory between these points
-        pieces += [position[start : end + 1, :]]
+        pieces += [trajectory[start : end + 1, :]]
     return pieces
 
 
@@ -2204,3 +2307,30 @@ def fit_spline(trajectory: np.ndarray, n_points: int = 1000) -> np.ndarray:
     times = np.linspace(trajectory[0, 0], trajectory[-1, 0], n_points)
     interpolation = cs(times)
     return np.hstack((times[:, None], interpolation))
+
+
+def smooth_with_window_average(
+    trajetory: np.ndarray, window_size: int = 10
+) -> np.ndarray:
+    """Smooth a trajectory using a rolling average
+
+    Parameters
+    ----------
+    trajetory : np.ndarray
+        A trajectory
+    window_size : int, optional
+        The size of the window to use for the rolling average, by default 10
+
+    Returns
+    -------
+    np.ndarray
+        The smoothed trajectory
+    """
+    smoothed_trajectory = np.zeros_like(trajetory)
+    for i in range(len(trajetory)):
+        window_start = max(0, i - window_size // 2)
+        window_end = min(len(trajetory), i + window_size // 2)
+        smoothed_trajectory[i, :] = np.mean(
+            trajetory[window_start:window_end, :], axis=0
+        )
+    return smoothed_trajectory

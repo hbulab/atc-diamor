@@ -1,14 +1,14 @@
 import os
 
+import pandas as pd
+
 from utils import *
 from constants import *
 
 if __name__ == "__main__":
-
     dir_path = "../../data/unformatted/diamor/annotations/"
 
     for day in DAYS_DIAMOR:
-
         group_annotations = os.path.join(
             dir_path, f"ids_wrt_group_size_taniguchi_{day}.pkl"
         )
@@ -56,6 +56,30 @@ if __name__ == "__main__":
                         "groups": [],
                     }
                 individuals_data[ped_id]["groups"] += [group_id]
+
+        # load granular annotations
+        granular_annotations_path = os.path.join(dir_path, f"taniguchi_gt_gest_06.pkl")
+        granular_annotations = pickle_load(granular_annotations_path)
+        for group_id in groups_data:
+            members = groups_data[group_id]["members"]
+            interactions = {}
+            for member in members:
+                if member in granular_annotations:
+                    # compare size of groups
+                    if (
+                        groups_data[group_id]["size"]
+                        != granular_annotations[member]["group_size"]
+                    ):
+                        continue  # skipping group because of size mismatch
+                    interactions[member] = {
+                        "is_interacting": granular_annotations[member][
+                            "is_interacting"
+                        ],
+                        "interaction_type": granular_annotations[member][
+                            "interaction_type"
+                        ],
+                    }
+            groups_data[group_id]["interactions"] = interactions
 
         groups_annotations_path = (
             f"../../data/formatted/diamor/groups_annotations_{day}.pkl"
