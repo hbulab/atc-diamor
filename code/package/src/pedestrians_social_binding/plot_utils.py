@@ -177,6 +177,8 @@ def plot_static_2D_trajectories(
     save_path: str = None,
     ax: matplotlib.axes.Axes = None,
     gradient: bool = False,
+    alpha: float = None,
+    vel: bool = False,
 ):
     """Plot the trajectories of a set of pedestrians
 
@@ -228,7 +230,14 @@ def plot_static_2D_trajectories(
         x, y = trajectory[:, 1], trajectory[:, 2]
         if gradient:
             t = trajectory[:, 0]
-            alpha = (t - t.min()) / (t.max() - t.min())
+            alpha_min = 0.1
+            alpha_max = 0.99
+            alpha = alpha_min + (alpha_max - alpha_min) * (t - t.min()) / (
+                t.max() - t.min()
+            )
+            #
+        elif alpha:
+            alpha = alpha
         else:
             alpha = 1
         ax.scatter(x / 1000, y / 1000, c=color, alpha=alpha, s=10, label=label)
@@ -245,18 +254,30 @@ def plot_static_2D_trajectories(
                 head_width=0.5,
             )
 
+        if vel:
+            ax.quiver(
+                x / 1000,
+                y / 1000,
+                trajectory[:, 5] / 1000,
+                trajectory[:, 6] / 1000,
+                color="black",
+            )
+
     ax.axis("scaled")
 
     if boundaries:
-        plt.xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
-        plt.ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
+        ax.set_xlim([boundaries["xmin"] / 1000, boundaries["xmax"] / 1000])
+        ax.set_ylim([boundaries["ymin"] / 1000, boundaries["ymax"] / 1000])
 
     if title is not None:
-        plt.title(title)
+        ax.set_title(title)
     ax.set_xlabel("x (m)")
 
     if labels is not None:
-        plt.legend()
+        leg = ax.legend()
+        # to make the legend not transparent
+        for lh in leg.legendHandles:
+            lh.set_alpha(1)
 
     ax.set_ylabel("y (m)")
     if show:
@@ -272,6 +293,7 @@ def plot_animated_2D_trajectories(
     simultaneous: bool = False,
     vel: bool = False,
     boundaries: dict = None,
+    trace: bool = True,
     vicinity: float = None,
     colors: list[str] = None,
     title: str = None,
@@ -373,7 +395,10 @@ def plot_animated_2D_trajectories(
                 )
 
         for label, position, color in zip(zip_labels, positions, colors):
-            ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=label)
+            if trace:
+                ax.scatter(position[:i, 0], position[:i, 1], c=color, s=10, label=label)
+            else:
+                ax.scatter(position[i, 0], position[i, 1], c=color, s=10, label=label)
         if title is not None:
             ax.set_title(title)
         if labels is not None:
@@ -385,7 +410,7 @@ def plot_animated_2D_trajectories(
         range(len(positions[0][:, 0])),
         fargs=(ax, labels, positions, velocities, vicinity, colors, title),
         repeat=loop,
-        interval=50,
+        interval=5,
         blit=False,
     )
 

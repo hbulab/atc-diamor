@@ -26,7 +26,13 @@ class Environment:
     """
 
     def __init__(self, name, data_dir, raw=False):
-        if name not in ["atc", "atc:corridor", "diamor", "diamor:corridor"]:
+        if name not in [
+            "atc",
+            "atc:corridor",
+            "diamor",
+            "diamor:corridor",
+            "diamor:center_corridor",
+        ]:
             raise ValueError(f"Unknown environment {name}.")
         self.short_name = name.split(":")[0]
         self.name = name
@@ -38,6 +44,9 @@ class Environment:
             if self.name == "atc" or self.name == "atc:corridor"
             else DAYS_DIAMOR
         )
+
+    def get_days(self):
+        return self.days
 
     """Get the boundaries of the environment"""
 
@@ -333,9 +342,8 @@ class Environment:
         dict of list of Group, the groups of the environment grouped by the given value
 
         """
-
         groups = self.get_groups(
-            days,
+            days=days,
             size=size,
             ped_thresholds=ped_thresholds,
             group_thresholds=group_thresholds,

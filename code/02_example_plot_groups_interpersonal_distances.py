@@ -5,6 +5,10 @@ from package.src.pedestrians_social_binding.plot_utils import *
 
 import matplotlib.pyplot as plt
 
+import scienceplots
+
+plt.style.use("science")
+
 
 if __name__ == "__main__":
 
@@ -56,34 +60,37 @@ if __name__ == "__main__":
 
     distances_wrt_interaction = {}
 
-    for interaction in range(4):
-        n_groups = len(groups_diamor[interaction])
+    with plt.rc_context({"font.size": 14}):
 
-        if interaction not in distances_wrt_interaction:
-            distances_wrt_interaction[interaction] = []
+        fig, ax = plt.subplots(figsize=(6, 4))
 
-        for group in groups_diamor[interaction]:
-            
-            distances = group.get_interpersonal_distance()
+        for interaction in range(4):
+            n_groups = len(groups_diamor[interaction])
 
+            if interaction not in distances_wrt_interaction:
+                distances_wrt_interaction[interaction] = []
 
-            # plot_static_2D_trajectories(
-            #     members, boundaries=diamor.boundaries, simultaneous=True
-            # )
+            for group in groups_diamor[interaction]:
 
-            distances_wrt_interaction[interaction] = np.concatenate(
-                (distances_wrt_interaction[interaction], distances / 1000)
-            )
+                distances = group.get_interpersonal_distance()
 
-        # print(len(distances_wrt_interaction[interaction]))
-        hist = np.histogram(distances_wrt_interaction[interaction], pdf_edges)[0]
-        pdf = hist / sum(hist) / bin_size
+                # plot_static_2D_trajectories(
+                #     members, boundaries=diamor.boundaries, simultaneous=True
+                # )
 
-        plt.plot(bin_centers, pdf, label=interaction)
+                distances_wrt_interaction[interaction] = np.concatenate(
+                    (distances_wrt_interaction[interaction], distances / 1000)
+                )
 
-    plt.legend()
-    plt.xlabel("d (m)")
-    plt.ylabel("p(d)")
-    plt.legend()
+            # print(len(distances_wrt_interaction[interaction]))
+            hist = np.histogram(distances_wrt_interaction[interaction], pdf_edges)[0]
+            pdf = hist / sum(hist) / bin_size
 
-    plt.show()
+            ax.plot(bin_centers, pdf, label=interaction)
+
+        ax.set_xlabel("$d$ (m)")
+        ax.set_ylabel("p($d$)")
+        ax.legend()
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+
+        plt.show()

@@ -9,7 +9,7 @@ if __name__ == "__main__":
     groups = diamor.get_groups(size=2)
 
     dict_verif_annotations = {i: {0: 0, 1: 0, 2: 0} for i in [0, 1, 2, 3]}
-
+    n = 0
     for group in groups:
         group_size = group.annotations["size"]
 
@@ -21,6 +21,8 @@ if __name__ == "__main__":
         if len(group.annotations["interactions"]) != group.annotations["size"]:
             continue
 
+        n += 1
+
         n_interacting = sum(
             [
                 group.annotations["interactions"][ped_id]["is_interacting"]
@@ -30,6 +32,7 @@ if __name__ == "__main__":
 
         dict_verif_annotations[group_intensity][n_interacting] += 1
 
+    print(n)
     df = pd.DataFrame(dict_verif_annotations).T
 
     df.plot.bar()

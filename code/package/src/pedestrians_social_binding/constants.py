@@ -16,6 +16,12 @@ BOUNDARIES_DIAMOR_CORRIDOR = {
     "ymin": -5300,
     "ymax": 12000,
 }
+BOUNDARIES_DIAMOR_CENTER_CORRIDOR = {
+    "xmin": 30000,
+    "xmax": 50000,
+    "ymin": 0,
+    "ymax": 7500,
+}
 
 
 # ---------- other constants ----------
@@ -24,6 +30,7 @@ BOUNDARIES = {
     "atc:corridor": BOUNDARIES_ATC_CORRIDOR,
     "diamor": BOUNDARIES_DIAMOR,
     "diamor:corridor": BOUNDARIES_DIAMOR_CORRIDOR,
+    "diamor:center_corridor": BOUNDARIES_DIAMOR_CENTER_CORRIDOR,
 }
 
 COLORS = [
@@ -62,10 +69,9 @@ ALL_DEFLECTION_MEASURES = [
     "maximum_scaled_lateral_deviation",
     "maximum_lateral_deviation",
     "area_under_curve",
-    "scaled_area_under_curve"
+    "scaled_area_under_curve",
 ]
 
 SOCIAL_BINDING = {"atc": "soc_rel", "diamor": "interaction"}
 
 SAMPLING_NUMBER = 1000
-

@@ -1,17 +1,14 @@
 import os
 
-from sympy import Add
 
 from utils import *
 from constants import *
 
 
 if __name__ == "__main__":
-
     dir_path = "../../data/unformatted/atc/annotations/"
 
     for day in DAYS_ATC:
-
         group_annotations = os.path.join(dir_path, f"tani_tutti_{day}.pkl")
         group_data = pickle_load(group_annotations)
 
@@ -34,7 +31,6 @@ if __name__ == "__main__":
             }
 
         for data_row in soc_rel_data:
-
             ped_id = data_row[0]
             group_size = data_row[1]
 

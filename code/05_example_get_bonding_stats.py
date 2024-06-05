@@ -14,14 +14,16 @@ if __name__ == "__main__":
         print(f"Environment: {env_name}")
         env = Environment(env_name, data_dir="../data/formatted")
 
-        groups = env.get_groups_grouped_by(env_bonding[env_name], size=2)
+        for day in env.get_days():
+            print(f" - Day: {day}")
+            groups = env.get_groups_grouped_by(
+                env_bonding[env_name], size=2, days=[day]
+            )
 
-        total = 0
-        for soc_rel in groups.keys():
-            if env_name == "atc" and soc_rel > 0 or env_name == "diamor":
-                print(
-                    f"Number of groups with social relation {env_values[env_name][soc_rel]}: {len(groups[soc_rel])}"
-                )
-                total += len(groups[soc_rel])
+            total = 0
+            for soc_rel in groups.keys():
+                if env_name == "atc" and soc_rel > 0 or env_name == "diamor":
+                    print(f"  {env_values[env_name][soc_rel]}: {len(groups[soc_rel])}")
+                    total += len(groups[soc_rel])
 
-        print(f"Total number of groups: {total}")
+            print(f"  Total: {total}")

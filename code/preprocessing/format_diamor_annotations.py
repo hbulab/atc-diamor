@@ -9,15 +9,19 @@ if __name__ == "__main__":
     dir_path = "../../data/unformatted/diamor/annotations/"
 
     for day in DAYS_DIAMOR:
+        print(f"Day: {day}")
         group_annotations = os.path.join(
             dir_path, f"ids_wrt_group_size_taniguchi_{day}.pkl"
         )
-        group_data = pickle_load(group_annotations)
+        raw_group_data = pickle_load(group_annotations)
 
         groups_data = {}
         individuals_data = {}
 
-        for groups in group_data:
+        for groups in raw_group_data:  # loop over group sizes
+            # if len(groups) > 0:
+            #     print(f"{len(groups[0])} -> {len(groups)}")
+
             for group in groups:
                 group_members = sorted(list(map(int, group)))
                 group_id = int("".join([str(int(pid)) for pid in group_members]))
@@ -38,17 +42,25 @@ if __name__ == "__main__":
         interaction_annotations = os.path.join(dir_path, f"gt_2p_yoshioka_{day}.pkl")
         interaction_data = pickle_load(interaction_annotations)
 
+        n_soc = {}
+        overlap = 0
         for row in interaction_data:
             group_members = sorted([int(row[0]), int(row[1])])
             group_id = int("".join([str(int(pid)) for pid in group_members]))
+            interaction = row[4]
+            if interaction not in n_soc:
+                n_soc[interaction] = 0
+            n_soc[interaction] += 1
+
             if group_id not in groups_data:
                 groups_data[group_id] = {
                     "size": 2,
                     "members": group_members,
-                    "interaction": row[4],
+                    "interaction": interaction,
                 }
             else:
-                groups_data[group_id]["interaction"] = row[4]
+                overlap += 1
+                groups_data[group_id]["interaction"] = interaction
 
             for ped_id in group_members:
                 if ped_id not in individuals_data:
@@ -56,10 +68,11 @@ if __name__ == "__main__":
                         "groups": [],
                     }
                 individuals_data[ped_id]["groups"] += [group_id]
-
+        # print(overlap)
         # load granular annotations
         granular_annotations_path = os.path.join(dir_path, f"taniguchi_gt_gest_06.pkl")
         granular_annotations = pickle_load(granular_annotations_path)
+
         for group_id in groups_data:
             members = groups_data[group_id]["members"]
             interactions = {}

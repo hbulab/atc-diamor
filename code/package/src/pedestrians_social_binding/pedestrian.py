@@ -114,7 +114,7 @@ class Pedestrian:
         pedestrians,
         proximity_threshold: int | None = 4000,
         skip: list[int] = [],
-        alone: bool | None = False,
+        alone: bool | None = None,
     ) -> list[Pedestrian]:
         """Get the pedestrians encountered by the pedestrian
 

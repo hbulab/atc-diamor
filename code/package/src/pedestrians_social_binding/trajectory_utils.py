@@ -2,7 +2,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from scipy.interpolate import CubicSpline
 from scipy.integrate import trapz
+from scipy.signal import savgol_filter, periodogram, find_peaks, hilbert
+from scipy.spatial import distance
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import hilbert
+from scipy.stats import entropy, circmean, circvar, circstd
 
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import random
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
     from pedestrians_social_binding.group import Group
@@ -12,12 +21,8 @@ if TYPE_CHECKING:  # Only imports the below statements during type checking
 from pedestrians_social_binding.constants import *
 from pedestrians_social_binding.parameters import *
 
-import numpy as np
-from scipy.spatial import distance
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from typing import List
 
+from pedestrians_social_binding.plot_utils import plot_static_2D_trajectories
 
 cross = lambda x, y, axis=None: np.cross(x, y, axis=axis)  # annotation bug
 
@@ -273,7 +278,10 @@ def compute_absolute_difference_velocity(
 
 
 def compute_relative_direction(
-    trajectory_A: np.ndarray, trajectory_B: np.ndarray
+    trajectory_A: np.ndarray,
+    trajectory_B: np.ndarray,
+    rel_dir_angle_cos: float = REL_DIR_ANGLE_COS,
+    rel_dir_min_perc: float = REL_DIR_MIN_PERC,
 ) -> str:
     """Compute the relative direction between two trajectories. First, compute
     the instantaneous relative direction at all time stamps based on the dot product between
@@ -299,11 +307,11 @@ def compute_relative_direction(
 
     pos_A = sim_traj_A[:, 1:3]
     pos_B = sim_traj_B[:, 1:3]
-    v_A = sim_traj_A[:, 5:7]
-    v_B = sim_traj_B[:, 5:7]
+    # v_A = sim_traj_A[:, 5:7]
+    # v_B = sim_traj_B[:, 5:7]
 
-    # d_AB is the vector from A to B
-    # d_AB = pos_B - pos_A
+    v_A = pos_A[1:] - pos_A[:-1]
+    v_B = pos_B[1:] - pos_B[:-1]
 
     # dot product of vA and vB
     v_d_dot = np.sum(v_A * v_B, axis=1)
@@ -313,20 +321,114 @@ def compute_relative_direction(
 
     cos_vA_vB = v_d_dot / norm_product
 
-    # rel_pos = np.zeros(cos_vA_vB.shape)
-
     n_val = len(cos_vA_vB)
 
-    n_same = np.sum(cos_vA_vB > REL_DIR_ANGLE)
-    n_opposite = np.sum(cos_vA_vB < -REL_DIR_ANGLE)
+    n_same = np.sum(cos_vA_vB > rel_dir_angle_cos)
+    n_opposite = np.sum(cos_vA_vB < -rel_dir_angle_cos)
     n_cross = n_val - n_same - n_opposite
 
-    if n_same > REL_DIR_MIN_PERC * n_val:
+    if n_same > rel_dir_min_perc * n_val:
         return "same"
-    elif n_opposite > REL_DIR_MIN_PERC * n_val:
+    elif n_opposite > rel_dir_min_perc * n_val:
         return "opposite"
-    elif n_cross > REL_DIR_MIN_PERC * n_val:
+    elif n_cross > rel_dir_min_perc * n_val:
         return "cross"
+    else:
+        return None
+
+
+def compute_trajectory_direction(trajectory: np.ndarray) -> str:
+    """Compute the direction of a trajectory.
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    str
+        The value of the relative direction ("left", "right")
+    """
+    # velocity = trajectory[:, 5:7]
+    dp = np.diff(trajectory[:, 1:3], axis=0)
+    dt = np.diff(trajectory[:, 0], axis=0)
+    velocity = dp / dt[:, None]
+    velocity_angle = np.arctan2(velocity[:, 1], velocity[:, 0])
+    velocity_angle[velocity_angle > np.pi] -= 2 * np.pi
+    velocity_angle[velocity_angle < -np.pi] += 2 * np.pi
+
+    mask_left = np.abs(velocity_angle) > 7 * np.pi / 8
+    mask_right = np.abs(velocity_angle) < np.pi / 8
+    n_left = np.sum(mask_left)
+    n_right = np.sum(mask_right)
+    perc_left = n_left / len(velocity_angle)
+    perc_right = n_right / len(velocity_angle)
+
+    # fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    # ax[1].plot(np.abs(velocity_angle))
+    # ax[1].set_ylim(0, np.pi)
+
+    # plot_static_2D_trajectories(
+    #     [trajectory],
+    #     gradient=True,
+    #     boundaries=env.boundaries,
+    #     ax=ax[0],
+    #     show=False,
+    # )
+    # plt.show()
+
+    # print(
+    #     f"Pedestrian {pedestrian_id} is {perc_left:.2f} left and {perc_right:.2f} right"
+    # )
+
+    if perc_left > DIR_MIN_PERC:
+        return "left"
+    elif perc_right > DIR_MIN_PERC:
+        return "right"
+    else:
+        return None
+
+
+def compute_encounter_side(trajectory_A: np.ndarray, trajectory_B: np.ndarray) -> str:
+    """Compute the encounter side between two trajectories. First, compute
+    the instantaneous relative direction at all time stamps based on the dot product between
+    the velocities. Then, aggregates the results if a direction is predominant.
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    str
+        The value of the encounter side ("left", "right")
+    """
+    sim_traj_A, sim_traj_B = compute_simultaneous_observations(
+        [trajectory_A, trajectory_B]
+    )
+    if len(sim_traj_A) < 1:
+        return None
+
+    pos_A = sim_traj_A[:, 1:3]
+    pos_B = sim_traj_B[:, 1:3]
+    v_A = sim_traj_A[:, 5:7]
+    v_B = sim_traj_B[:, 5:7]
+
+    # check if B is mostly on the right of A
+    # d_AB is the vector from A to B
+    B_on_right = np.cross(v_A, pos_B - pos_A) < 0
+    n_val = len(B_on_right)
+    n_right = np.sum(B_on_right)
+    n_left = n_val - n_right
+
+    if n_right > ENC_SIDE_MIN_PERC * n_val:
+        return "right"
+    elif n_left > ENC_SIDE_MIN_PERC * n_val:
+        return "left"
     else:
         return None
 
@@ -381,22 +483,22 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
         else:
             return None
 
-    elif value == "t":  # threshold on the time
-        time = pedestrian.get_column("t")
-        t_obs = time[-1] - time[0]
-        if (
-            (
-                min_val is not None
-                and max_val is not None
-                and t_obs <= max_val
-                and t_obs >= min_val
-            )
-            or (min_val is not None and t_obs >= min_val)
-            or (max_val is not None and t_obs <= max_val)
-        ):
-            return pedestrian
-        else:
-            return None
+    # elif value == "t":  # threshold on the time
+    #     time = pedestrian.get_time()
+    #     t_obs = time[-1] - time[0]
+    #     if (
+    #         (
+    #             min_val is not None
+    #             and max_val is not None
+    #             and t_obs <= max_val
+    #             and t_obs >= min_val
+    #         )
+    #         or (min_val is not None and t_obs >= min_val)
+    #         or (max_val is not None and t_obs <= max_val)
+    #     ):
+    #         return pedestrian
+    #     else:
+    #         return None
 
     # elif value == "theta":  # threshold on turning angles
     #     position = pedestrian.get_position()
@@ -419,7 +521,7 @@ def filter_pedestrian(pedestrian: Pedestrian, threshold: Threshold) -> Pedestria
     #     # print(threshold_indices)
 
     # elif value == "v":
-    elif value in ["x", "y"]:  # threshold on the position
+    elif value in ["x", "y", "t"]:  # threshold on the position
         column = pedestrian.get_trajectory_column(value)
         mean_value = np.nanmean(column)
         if min_val is not None and max_val is not None:
@@ -751,7 +853,7 @@ def compute_continuous_sub_trajectories(
 
 
 def compute_continuous_sub_trajectories_using_time(
-    trajectory: np.ndarray, max_gap: int = 2
+    trajectory: np.ndarray, max_gap: float = 2
 ) -> list[np.ndarray]:
     """Breaks down a trajectory in to a list of sub-trajectories that have maximum time
     gaps of max_gap
@@ -898,7 +1000,116 @@ def compute_maximum_lateral_deviation(
 
 def compute_maximum_lateral_deviation_using_vel(
     traj: np.ndarray,
-    n_average=33,
+    n_average=66,
+    plot: bool = False,
+    ax: plt.Axes | None = None,
+) -> float:
+    """Computes the maximum lateral deviation over the trajectory (the maximum distance from points of the trajectories to the line joining the first and last point of the trajectory).
+
+    Parameters
+    ----------
+    traj : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to average the velocity over, by default 3
+    Returns
+    -------
+    float
+        The value for the maximum lateral deviation
+    """
+    pos = traj[:, 1:3]
+    dt = (traj[1:, 0] - traj[:-1, 0]) / 1000
+    dp = pos[1:] - pos[:-1]
+    vel = dp / dt[:, None]
+
+    start_point = pos[0]
+    middle_points = pos[1:-1]
+
+    start_vel = np.nanmean(vel[:n_average], axis=0)
+
+    distances_to_straight_line = np.abs(
+        cross(start_vel, middle_points - start_point)
+    ) / np.linalg.norm(start_vel)
+
+    idx_max = np.argmax(distances_to_straight_line) + 1
+    position_max = pos[np.argmax(distances_to_straight_line) + 1, :]
+
+    max_distance = np.max(distances_to_straight_line) / 1000
+
+    if plot:
+        if ax is None:
+            fig, ax = plt.subplots()
+        # show trajectory
+        ax.plot(pos[:, 0] / 1000, pos[:, 1] / 1000, color="black")
+        # show line guided by velocity
+        end_line = start_point + start_vel * (
+            np.dot(start_vel, (pos[-1] - start_point)) / np.dot(start_vel, start_vel)
+        )
+        ax.plot(
+            [start_point[0] / 1000, end_line[0] / 1000],
+            [start_point[1] / 1000, end_line[1] / 1000],
+            color="red",
+        )
+        # show furthest point in red
+        ax.scatter(
+            position_max[0] / 1000,
+            position_max[1] / 1000,
+            color="red",
+            s=20,
+        )
+        # show distance to line in purple
+        point_on_line_furthest = start_point + start_vel * (
+            np.dot(start_vel, (position_max - start_point))
+            / np.dot(start_vel, start_vel)
+        )
+        ax.plot(
+            [position_max[0] / 1000, point_on_line_furthest[0] / 1000],
+            [position_max[1] / 1000, point_on_line_furthest[1] / 1000],
+            color="purple",
+        )
+        ax.set_aspect("equal")
+
+    return max_distance  # , idx_max
+
+
+def compute_maximum_lateral_deviation_using_vel_with_interpolation(
+    traj: np.ndarray,
+    n_average=3,
+    interpolate: bool = False,
+) -> float:
+    pos = traj[:, 1:3]
+    vel = traj[:, 5:7]
+    delta_ts = (traj[1:, 0] - traj[:-1, 0]) / 1000
+
+    start_point = pos[0]
+    middle_points = pos[1:-1]
+
+    start_vel = np.nanmean(traj[:n_average, 5:7], axis=0)
+
+    if not interpolate:
+        distances_to_straight_line = np.abs(
+            cross(start_vel, middle_points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        return max_distance
+
+    else:
+        # position after half time step, extrapolating velocity
+        extr_pos = pos[:-1] + delta_ts[:, None] / 2 * vel[:-1]
+        points = np.concatenate((middle_points, extr_pos))
+        distances_to_straight_line = np.abs(
+            cross(start_vel, points - start_point)
+        ) / np.linalg.norm(start_vel)
+
+        max_distance = np.max(distances_to_straight_line)
+        return max_distance
+
+
+def compute_signed_maximum_lateral_deviation_using_vel(
+    traj: np.ndarray,
+    right_encounter: bool = True,
+    n_average: int = 66,
     plot: bool = False,
     ax: plt.Axes | None = None,
 ) -> tuple[float, int]:
@@ -908,8 +1119,14 @@ def compute_maximum_lateral_deviation_using_vel(
     ----------
     traj : np.ndarray
         A trajectory
+    right_encounter : bool, optional
+        Whether the encounter is a right encounter or not, by default True
     n_average : int, optional
         The number of points to average the velocity over, by default 3
+    plot : bool, optional
+        Whether or not to plot the result, by default False
+    ax : plt.Axes | None, optional
+        The axes on which to plot, by default None
     Returns
     -------
     float
@@ -933,6 +1150,19 @@ def compute_maximum_lateral_deviation_using_vel(
     position_max = pos[np.argmax(distances_to_straight_line) + 1, :]
 
     max_distance = np.max(distances_to_straight_line)
+
+    # check if the furthest point is on the right or left of the line
+    start_line = start_point
+    end_line = start_point + start_vel
+    point_max = pos[idx_max]
+    max_on_right = np.cross(end_line - start_line, point_max - start_line) < 0
+    # sign the distance
+    if right_encounter:
+        if max_on_right:
+            max_distance *= -1
+    else:
+        if not max_on_right:
+            max_distance *= -1
 
     if plot:
         if ax is None:
@@ -1146,6 +1376,9 @@ def compute_net_displacement(position: np.ndarray) -> float:
     float
         The value for the net displacement
     """
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
     start_point = position[0]
     end_point = position[-1]
     net_displacement = np.linalg.norm(end_point - start_point)
@@ -1186,9 +1419,27 @@ def compute_straightness_index(position: np.ndarray) -> float:
     float
         The value for the straightness index
     """
+    # not more that 2 columns
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
     net_displacement = compute_net_displacement(position)
     gross_displacement = compute_gross_displacement(position)
     return net_displacement / gross_displacement
+
+
+def compute_max_straightness_index(position: np.ndarray) -> float:
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
+    max_straightness_index = 0
+    for i in range(1, len(position)):
+        net_displacement = compute_net_displacement(position[:i])
+        gross_displacement = compute_gross_displacement(position[:i])
+        straightness_index = 1 - net_displacement / gross_displacement
+        if straightness_index > max_straightness_index:
+            max_straightness_index = straightness_index
+    return max_straightness_index
 
 
 def compute_straightness_index_spline(traj: np.ndarray) -> float:
@@ -1224,6 +1475,10 @@ def compute_turning_angles(position: np.ndarray) -> np.ndarray:
     np.ndarray
         The array of turning angles along the trajectory
     """
+    # not more that 2 columns
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
     step_vectors = position[1:, :] - position[:-1, :]
     turning_angles = np.arctan2(step_vectors[1:, 0], step_vectors[1:, 1]) - np.arctan2(
         step_vectors[:-1, 0], step_vectors[:-1, 1]
@@ -1257,29 +1512,63 @@ def compute_angles(vectors_1: np.ndarray, vectors_2: np.ndarray) -> np.ndarray:
     return angles
 
 
-# def rediscretize_trajectory(
-#     trajectory: np.ndarray, step_length: None | float = None
-# ) -> np.ndarray:
-#     """Transforms the trajectory so that the distance between each point is fixed
+def rediscretize_trajectory(
+    trajectory: np.ndarray, step_length: None | float = None
+) -> np.ndarray:
+    """Transforms the trajectory so that the distance between each point is fixed
 
-#     Parameters
-#     ----------
-#     trajectory : np.ndarray
-#         A trajectory
-#     step_length : None | float, optional
-#         The length of the step, by default None
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    step_length : None | float, optional
+        The length of the step, by default None
 
-#     Returns
-#     -------
-#     np.ndarray
-#         The trajectory with a constant step size
-#     """
-#     step_sizes = np.linalg.norm(position[:-1] - position[1:], axis=1)
-#     n_points = len(position)
-#     if step_length is None:
-#         step_length = np.min(step_sizes)
-#     else:
-#         q = step_length
+    Returns
+    -------
+    np.ndarray
+        The trajectory with a constant step size
+    """
+
+    rediscretized_position = []
+    current_point = trajectory[0, 0:3]
+    start_segment, end_segment = trajectory[0, 0:3], trajectory[1, 0:3]
+    start_segment_index, end_segment_index = 0, 1
+    rediscretized_position += [current_point]
+    done = False
+    while not done:
+        d_point_goal = np.linalg.norm(end_segment[1:3] - current_point[1:3])
+        if d_point_goal > step_length:  # there is space until the next trajectory point
+            l = step_length / d_point_goal
+            current_point = l * end_segment + (1 - l) * current_point
+            rediscretized_position += [current_point]
+        else:  # no more space, the points needs to be on one of the next segments
+            # find the closest segment that intersects the circle centered on current_point
+            # with radius step_length
+            found_intersection = False
+            while not found_intersection:
+                if end_segment_index == len(trajectory) - 1:  # last point
+                    done = True
+                    break
+                start_segment_index = end_segment_index
+                end_segment_index = start_segment_index + 1
+                start_segment = trajectory[start_segment_index, :3]
+                end_segment = trajectory[end_segment_index, :3]
+                intersection = find_intersection_circle_segment_with_time(
+                    current_point,
+                    step_length,
+                    start_segment,
+                    end_segment,
+                )
+                if intersection is not None:
+                    found_intersection = True
+                    current_point = intersection
+                    rediscretized_position += [current_point]
+
+    rediscretized_position = np.array(rediscretized_position)
+    rediscretized_trajectory = np.zeros((len(rediscretized_position), 7))
+    rediscretized_trajectory[:, 0:3] = rediscretized_position
+    return rediscretized_trajectory
 
 
 def rediscretize_position_v2(position: np.ndarray, step_length: float):
@@ -1327,7 +1616,22 @@ def rediscretize_position_v2(position: np.ndarray, step_length: float):
                     found_intersection = True
                     current_point = intersection
                     rediscretized_position += [current_point]
-    return np.array(rediscretized_position)
+
+    rediscretized_position = np.array(rediscretized_position)
+    # diff = np.linalg.norm(
+    #     rediscretized_position[:-1] - rediscretized_position[1:], axis=1
+    # )
+    # print(diff)
+    # plt.scatter(position[:, 0], position[:, 1])
+    # plt.plot(
+    #     np.array(rediscretized_position)[:, 0],
+    #     np.array(rediscretized_position)[:, 1],
+    #     "ro-",
+    # )
+    # plt.axis("equal")
+    # plt.show()
+
+    return rediscretized_position
 
 
 def find_intersection_circle_segment(C, radius, A, B):
@@ -1351,6 +1655,39 @@ def find_intersection_circle_segment(C, radius, A, B):
     # solve quadratic equation for lambda
     a = AB_norm**2
     b = 2 * np.dot(-AC, AB)
+    c = AC_norm**2 - radius**2
+    delta = b**2 - 4 * a * c
+    if a == 0:
+        if b == 0:
+            return None
+        lambda_1 = -c / b
+        if 0 <= lambda_1 <= 1:
+            return A + lambda_1 * AB
+        else:
+            return None
+    if delta < 0:
+        return None
+    lambda_1 = (-b - delta**0.5) / (2 * a)
+    lambda_2 = (-b + delta**0.5) / (2 * a)
+    # is one of the lambdas between 0 and 1?
+    if 0 <= lambda_1 <= 1:
+        return A + lambda_1 * AB
+    elif 0 <= lambda_2 <= 1:
+        return A + lambda_2 * AB
+    else:
+        return None
+
+
+def find_intersection_circle_segment_with_time(C, radius, A, B):
+    AC = C - A
+    AB = B - A
+    AB_norm = np.linalg.norm(AB[1:3])
+    AC_norm = np.linalg.norm(AC[1:3])
+    # (x, y) is on the circle if (x - Cx)^2 + (y - Cy)^2 = radius^2
+    # (x, y) is on the segment if AP = lambda * AB with 0 <= lambda <= 1
+    # solve quadratic equation for lambda
+    a = AB_norm**2
+    b = 2 * np.dot(-AC[1:3], AB[1:3])
     c = AC_norm**2 - radius**2
     delta = b**2 - 4 * a * c
     if a == 0:
@@ -1430,39 +1767,93 @@ def rediscretize_position(
 
 
 def compute_curvature(trajectory: np.ndarray) -> list[int]:
-    dt = (trajectory[1:, 0] - trajectory[:-1, 0]) / 1000
-    dp = trajectory[1:, 1:3] - trajectory[:-1, 1:3]
+    dt = trajectory[1:, 0] - trajectory[:-1, 0]
+    dp = (trajectory[1:, 1:3] - trajectory[:-1, 1:3]) / 1000
     v = dp / dt[:, None]
-    a = v[1:, :] - v[:-1, :] / dt[1:, None]
+    a = (v[1:, :] - v[:-1, :]) / dt[1:, None]
     v_mag = np.linalg.norm(v[1:, :], axis=1)
     non_zero = v_mag != 0
     k = np.cross(v[1:, :], a, axis=1)[non_zero] / v_mag[non_zero] ** 3
     return np.abs(k)
 
 
-def compute_curvature_spline(trajectory: np.ndarray) -> list[int]:
-    cs = CubicSpline(trajectory[:, 0], trajectory[:, 1:3])
+def compute_curvature_gradient(trajectory: np.ndarray) -> list[int]:
+    v = np.gradient(trajectory[:, 1:3], trajectory[:, 0], axis=0)
+    a = np.gradient(v, trajectory[:, 0], axis=0)
+    v_mag = np.linalg.norm(v, axis=1)
+    k = np.cross(v, a, axis=1) / v_mag**3
+    return k
+
+
+def compute_tangents(trajectory: np.ndarray) -> list[int]:
+    v = np.gradient(trajectory[:, 1:3], trajectory[:, 0], axis=0)
+    v_mag = np.linalg.norm(v, axis=1)
+    t = v / v_mag[:, None]
+    return t
+
+
+def compute_normals(trajectory: np.ndarray) -> list[int]:
+    t = compute_tangents(trajectory)
+    n = np.zeros_like(t)
+    n[:, 0] = -t[:, 1]
+    n[:, 1] = t[:, 0]
+    return n
+
+
+def compute_curvature_unsigned(trajectory: np.ndarray) -> list[int]:
+    dt = trajectory[1:, 0] - trajectory[:-1, 0]
+    dp = (trajectory[1:, 1:3] - trajectory[:-1, 1:3]) / 1000
+    v = dp / dt[:, None]
+    a = (v[1:, :] - v[:-1, :]) / dt[1:, None]
+    v_mag = np.linalg.norm(v[1:, :], axis=1)
+    non_zero = v_mag != 0
+    k = np.cross(v[1:, :], a, axis=1)[non_zero] / v_mag[non_zero] ** 3
+    return k
+
+
+def compute_curvature_integral(trajectory: np.ndarray) -> float:
+    unsigned_curvature = compute_curvature_unsigned(trajectory)
+    return np.abs(np.trapz(unsigned_curvature, trajectory[2:, 0]))
+
+
+def compute_tortuosity_from_curvature(trajectory: np.ndarray) -> float:
+    unsigned_curvature = compute_curvature_unsigned(trajectory)
+    squared_curvature = np.array(unsigned_curvature) ** 2
+    return np.trapz(squared_curvature, trajectory[2:, 0]) / compute_gross_displacement(
+        trajectory[:, 1:3]
+    )
+
+
+def compute_curvature_spline(
+    trajectory: np.ndarray, f_sampling: float = 100
+) -> list[int]:
+    cs = CubicSpline(trajectory[:, 0], trajectory[:, 1:3] / 1000)
 
     dcs = cs.derivative()
     ddcs = dcs.derivative()
-    v = dcs(trajectory[:, 0])
-    a = ddcs(trajectory[:, 0])
+
+    duration = trajectory[-1, 0] - trajectory[0, 0]
+    n_points = int(duration * f_sampling)
+
+    t = np.linspace(trajectory[0, 0], trajectory[-1, 0], n_points)
+
+    v = dcs(t)
+    a = ddcs(t)
 
     k = np.cross(v, a, axis=1) / np.linalg.norm(v, axis=1) ** 3
+
+    # v = dcs(trajectory[:, 0])
+    # a = ddcs(trajectory[:, 0])
+
     # if np.max(k) > 1:
     #     # show spline and trajectory
-    #     plt.scatter(
-    #         trajectory[:, 1],
-    #         trajectory[:, 2],
-    #         label="data",
-    #     )
-    #     xs = np.linspace(trajectory[0, 0], trajectory[-1, 0], NUMBER_OF_POINTS)
-    #     interpolation = cs(xs)
-    #     plt.plot(interpolation[:, 0], interpolation[:, 1], label="spline")
-    #     plt.axis("equal")
-    #     plt.show()
+    # plt.scatter(trajectory[:, 1] / 1000, trajectory[:, 2] / 1000, label="data", s=4)
+    # interpolation = cs(t)
+    # plt.scatter(interpolation[:, 0], interpolation[:, 1], label="spline", c=k, s=1)
+    # plt.axis("equal")
+    # plt.show()
 
-    return np.abs(k)
+    return np.abs(k), v, a, t
 
 
 def compute_curvature_v2(trajectory: np.ndarray) -> list[int]:
@@ -1507,7 +1898,9 @@ def compute_curvature_v2(trajectory: np.ndarray) -> list[int]:
     return np.abs(k)
 
 
-def compute_sinuosity(position: np.ndarray, step_length: None | float = None) -> float:
+def compute_sinuosity(
+    position: np.ndarray, step_length: None | float = None, rediscretize=True
+) -> float:
     """Computes the sinuosity of the trajectory. Sinuosity is defined as 1.18 * s/q where
     s is the standard deviation of the turning angles of the trajectory and q is the step size
     of the trajectory
@@ -1515,25 +1908,106 @@ def compute_sinuosity(position: np.ndarray, step_length: None | float = None) ->
     Parameters
     ----------
     position : np.ndarray
-        A positon
+        A position
     step_length : None | float, optional
         The length of the step, by default None
+    rediscretize : bool, optional
+        Whether or not to rediscretize the trajectory, by default True
 
     Returns
     -------
     float
-        The value for the sinuosityw
+        The value for the sinuosity
     """
+
+    # not more that 2 columns
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
+    if rediscretize:
+        position = rediscretize_position_v2(position, step_length=step_length)
+        if len(position) <= 1:
+            return np.nan
+    step_length = np.linalg.norm(position[1] - position[0]) / 1000
+    turning_angles = compute_turning_angles(position)
+    # sinuosity = 1.18 * np.std(turning_angles) / step_length**0.5
+    sinuosity = 1.18 * circstd(turning_angles, high=np.pi, low=-np.pi) / step_length
+    return sinuosity
+
+
+def compute_turning_angle_integral(
+    position: np.ndarray, step_length: None | float = None
+) -> float:
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
     rediscretized_position = rediscretize_position_v2(position, step_length=step_length)
     if len(rediscretized_position) <= 1:
-        print(len(rediscretized_position), len(position))
-        plt.scatter(position[:, 0], position[:, 1])
-        plt.scatter(rediscretized_position[:, 0], rediscretized_position[:, 1])
-        plt.show()
-        return None
-    step_length = np.linalg.norm(rediscretized_position[1] - rediscretized_position[0])
+        return np.nan
     turning_angles = compute_turning_angles(rediscretized_position)
-    sinuosity = 1.18 * np.std(turning_angles) / step_length**0.5
+    return np.abs(np.trapz(turning_angles))
+
+
+def compute_max_cumulative_turning_angle(
+    position: np.ndarray, step_length: None | float = None, rediscretize=True
+) -> float:
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
+    if rediscretize:
+        position = rediscretize_position_v2(position, step_length=step_length)
+        if len(position) <= 1:
+            return np.nan
+    turning_angles = compute_turning_angles(position)
+    return np.max(np.abs(np.cumsum(turning_angles)))
+
+
+def compute_vertical_maximum_deviation(trajectory: np.ndarray) -> float:
+    """Computes the maximum vertical deviation over the trajectory (the maximum distance from points of the trajectories to the x axis)
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The value for the maximum vertical deviation
+    """
+    initial_y = trajectory[0, 2]
+    index_max_deviation = np.argmax(np.abs(trajectory[:, 2] - initial_y))
+    maximum_vertical_deviation = np.abs(trajectory[index_max_deviation, 2] - initial_y)
+    return maximum_vertical_deviation
+
+
+def compute_sinuosity_without_rediscretization(position: np.ndarray) -> float:
+    """Computes the sinuosity of the trajectory using the formula from Benhamou, S. (2004).
+
+    Parameters
+    ----------
+    position : np.ndarray
+        The positions
+
+    Returns
+    -------
+    float
+        The value for the sinuosity
+    """
+    # not more that 2 columns
+    if position.shape[1] > 2:
+        raise ValueError("Position should be a 2D array")
+
+    step_lengths = np.linalg.norm(position[:-1, :] - position[1:, :], axis=1)
+    p = np.mean(step_lengths)  # mean step length
+    std_step_length = np.std(step_lengths)
+    b = std_step_length / p  # coefficient of variation of step length
+    turning_angles = compute_turning_angles(position)
+    cos_turning_angles = np.cos(turning_angles)
+    c = np.mean(cos_turning_angles)  # mean cosine of turning angles
+    if c == 1:
+        return 0
+    sinuosity = 2 * (p * ((1 + c) / (1 - c) + b**2)) ** -0.5
     return sinuosity
 
 
@@ -1569,7 +2043,7 @@ def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> 
     end_point = position[-1]
     # for all points, compute the distance between the line
     # from start S to end E and the point P
-    # i.e. (SE x PE) / ||PE||
+    # i.e. (SE x PE) / ||SE||
     distances_to_straight_line = np.abs(
         cross(end_point - start_point, position - start_point)
     ) / np.linalg.norm(end_point - start_point)
@@ -1577,9 +2051,7 @@ def compute_area_under_the_curve(position: np.ndarray, scaled: bool = False) -> 
     # compute the projection of the trajectory points onto the straight line
     # get the bases of the trapezoid
     distances_to_first_point = distance.cdist([start_point], position)[0]
-    cumul_bases = (
-        distances_to_first_point**2 - distances_to_straight_line**2
-    ) ** 0.5
+    cumul_bases = (distances_to_first_point**2 - distances_to_straight_line**2) ** 0.5
     bases = cumul_bases[1:] - cumul_bases[:-1]
 
     # areas to the right are negative
@@ -1642,7 +2114,11 @@ def compute_deflection(
 
 
 def get_pieces(
-    trajectory: np.ndarray, piece_size: int, overlap: bool = False, delta: int = 100
+    trajectory: np.ndarray,
+    piece_size: int,
+    overlap: bool = False,
+    delta: int = 100,
+    max_pieces: int | None = None,
 ) -> list[np.ndarray]:
     """Breaks up a trajectory in to pieces of given length
 
@@ -1681,6 +2157,11 @@ def get_pieces(
 
         # get the trajectory between these points
         pieces += [trajectory[start : end + 1, :]]
+
+    if max_pieces is not None and len(pieces) > max_pieces:
+        # sample random pieces
+        pieces = random.sample(pieces, max_pieces)
+
     return pieces
 
 
@@ -1865,39 +2346,78 @@ def get_time_step(trajectory: np.ndarray) -> float:
     return step
 
 
-def resample_trajectory(trajectory: np.ndarray, sampling_time: int = 500) -> np.ndarray:
+def resample_trajectory(
+    trajectory: np.ndarray, sampling_time: float = 0.5, interpolation: str = "linear"
+) -> np.ndarray:
     """Resample the trajectory using the given time step
 
     Parameters
     ----------
     trajectory : np.ndarray
         A trajectory
-    sampling_time : int, optional
-        The time step to use (in ms), by default 500
-
+    sampling_time : float, optional
+        The new sampling time, by default 500
+    interpolation : str, optional
+        The interpolation method to use, by default "linear"
     Returns
     -------
     np.ndarray
         The trajectory sampled a intervals of given time
     """
-    current_time_step = get_time_step(trajectory)
-    if (
-        current_time_step < 1.2 * sampling_time
-        and current_time_step > 0.8 * sampling_time
-    ):  # nothing to do
-        return trajectory
-
     times = trajectory[:, 0]
-    traj_time_steps = times[1:] - times[:-1]
+    duration = times[-1] - times[0]
+    n_points = int(duration / sampling_time)
+    new_times = np.linspace(times[0], times[-1], n_points)
+    new_trajectory = np.ndarray(shape=(n_points, 7))
+    new_trajectory[:, 0] = new_times
+    if interpolation == "linear":
+        # linear interpolation for the position
+        new_trajectory[:, 1] = np.interp(new_times, times, trajectory[:, 1])
+        new_trajectory[:, 2] = np.interp(new_times, times, trajectory[:, 2])
+    elif interpolation == "spline":
+        # spline interpolation for the position
+        # remove duplicate times
+        unique_times, unique_indices = np.unique(times, return_index=True)
+        unique_positions = trajectory[unique_indices, 1:3]
+        cs = CubicSpline(unique_times, unique_positions)
+        new_trajectory[:, 1:3] = cs(new_times)
 
-    rows_to_keep = [0]
-    current_step = 0
-    for i, time_step in enumerate(traj_time_steps):
-        if current_step >= sampling_time:
-            rows_to_keep += [i]
-            current_step = 0
-        current_step += time_step
-    return trajectory[rows_to_keep, ...]
+    return new_trajectory
+
+
+# def resample_trajectory(trajectory: np.ndarray, sampling_time: int = 500) -> np.ndarray:
+#     """Resample the trajectory using the given time step
+
+#     Parameters
+#     ----------
+#     trajectory : np.ndarray
+#         A trajectory
+#     sampling_time : int, optional
+#         The time step to use (in ms), by default 500
+
+#     Returns
+#     -------
+#     np.ndarray
+#         The trajectory sampled a intervals of given time
+#     """
+#     current_time_step = get_time_step(trajectory)
+#     if (
+#         current_time_step < 1.2 * sampling_time
+#         and current_time_step > 0.8 * sampling_time
+#     ):  # nothing to do
+#         return trajectory
+
+#     times = trajectory[:, 0]
+#     traj_time_steps = times[1:] - times[:-1]
+
+#     rows_to_keep = [0]
+#     current_step = 0
+#     for i, time_step in enumerate(traj_time_steps):
+#         if current_step >= sampling_time:
+#             rows_to_keep += [i]
+#             current_step = 0
+#         current_step += time_step
+#     return trajectory[rows_to_keep, ...]
 
 
 def compute_time_to_collision(obs_1: np.ndarray, obs_2: np.ndarray, delta=500) -> float:
@@ -1944,7 +2464,10 @@ def compute_time_to_collision(obs_1: np.ndarray, obs_2: np.ndarray, delta=500) -
 
 
 def align_trajectories_at_origin(
-    trajectory_ref: np.ndarray, trajectories: list[np.ndarray]
+    trajectory_ref: np.ndarray,
+    trajectories: list[np.ndarray],
+    axis: str = "x",
+    nullify_velocities: bool = True,
 ) -> tuple[np.ndarray, list[np.ndarray]]:
     """Transform the trajectories in such a way that position for trajectory_ref will always
      be at the origin and velocity for A will be aligned along the positive x axis.
@@ -1962,6 +2485,11 @@ def align_trajectories_at_origin(
     tuple[np.ndarray, np.ndarray]
         The aligned trajectories
     """
+    simultaneous_trajectories = compute_simultaneous_observations(
+        [trajectory_ref] + trajectories
+    )
+    trajectory_ref = simultaneous_trajectories[0]
+    trajectories = simultaneous_trajectories[1:]
 
     # build the rotation matrix
     rotation_matrices = np.zeros(
@@ -1969,19 +2497,28 @@ def align_trajectories_at_origin(
     )  # 1 rotation matrix per observation
 
     vel_mag = np.linalg.norm(trajectory_ref[:, 5:7], axis=1)
-    cos_rot = trajectory_ref[:, 5] / vel_mag
-    sin_rot = trajectory_ref[:, 6] / vel_mag
+    if axis == "x":
+        cos_rot = trajectory_ref[:, 5] / vel_mag
+        sin_rot = -trajectory_ref[:, 6] / vel_mag
+    elif axis == "y":
+        cos_rot = trajectory_ref[:, 6] / vel_mag
+        sin_rot = trajectory_ref[:, 5] / vel_mag
 
     rotation_matrices[:, 0, 0] = cos_rot
-    rotation_matrices[:, 0, 1] = sin_rot
-    rotation_matrices[:, 1, 0] = -sin_rot
+    rotation_matrices[:, 0, 1] = -sin_rot
+    rotation_matrices[:, 1, 0] = sin_rot
     rotation_matrices[:, 1, 1] = cos_rot
 
     transformed_ref = trajectory_ref.copy()
     # translate the position to have it always at 0, 0
     transformed_ref[:, 1:3] -= trajectory_ref[:, 1:3]
     # translate the velocities
-    transformed_ref[:, 5:7] -= trajectory_ref[:, 5:7]
+    if nullify_velocities:
+        transformed_ref[:, 5:7] -= trajectory_ref[:, 5:7]
+    # rotate the reference velocity
+    transformed_ref[:, 5:7] = np.diagonal(
+        np.dot(rotation_matrices, transformed_ref[:, 5:7].T), axis1=0, axis2=2
+    ).T
 
     transformed_trajectories = []
     for trajectory in trajectories:
@@ -1994,7 +2531,8 @@ def align_trajectories_at_origin(
 
         # transform the velocities
         vel = transformed_trajectory[:, 5:7]
-        vel -= trajectory_ref[:, 5:7]
+        if nullify_velocities:
+            vel -= trajectory_ref[:, 5:7]
         rotated_vel = np.diagonal(np.dot(rotation_matrices, vel.T), axis1=0, axis2=2).T
         transformed_trajectory[:, 5:7] = rotated_vel
         transformed_trajectories += [transformed_trajectory]
@@ -2310,7 +2848,7 @@ def fit_spline(trajectory: np.ndarray, n_points: int = 1000) -> np.ndarray:
 
 
 def smooth_with_window_average(
-    trajetory: np.ndarray, window_size: int = 10
+    trajectory: np.ndarray, window_size: int = 10
 ) -> np.ndarray:
     """Smooth a trajectory using a rolling average
 
@@ -2326,11 +2864,1164 @@ def smooth_with_window_average(
     np.ndarray
         The smoothed trajectory
     """
-    smoothed_trajectory = np.zeros_like(trajetory)
-    for i in range(len(trajetory)):
+    smoothed_trajectory = np.zeros_like(trajectory)
+    for i in range(len(trajectory)):
         window_start = max(0, i - window_size // 2)
-        window_end = min(len(trajetory), i + window_size // 2)
-        smoothed_trajectory[i, :] = np.mean(
-            trajetory[window_start:window_end, :], axis=0
+        window_end = min(len(trajectory), i + window_size // 2)
+        smoothed_trajectory[i, 1:3] = np.mean(
+            trajectory[window_start:window_end, 1:3], axis=0
+        )
+        smoothed_trajectory[i, 0] = trajectory[i, 0]
+        smoothed_trajectory[i, 3:] = trajectory[i, 3:]
+    return smoothed_trajectory
+
+
+def smooth_trajectory_with_window_average(
+    trajectory: np.ndarray, window_size: int = 10
+) -> np.ndarray:
+    """Smooth a trajectory using a rolling average
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    window_size : int, optional
+        The size of the window to use for the rolling average, by default 10
+
+    Returns
+    -------
+    np.ndarray
+        The smoothed trajectory
+    """
+    smoothed_trajectory = np.copy(trajectory)
+    for i in range(len(trajectory)):
+        window_start = max(0, i - window_size // 2)
+        window_end = min(len(trajectory), i + window_size // 2)
+        smoothed_trajectory[i, 1:3] = np.mean(
+            trajectory[window_start:window_end, 1:3], axis=0
+        )
+        smoothed_trajectory[i, 5:7] = np.mean(
+            trajectory[window_start:window_end, 5:7], axis=0
         )
     return smoothed_trajectory
+
+
+def smooth_trajectory_savitzy_golay(
+    trajectory: np.ndarray, window_size: int = 10, order: int = 2
+) -> np.ndarray:
+    """Smooth a trajectory using a Savitzy-Golay filter
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    window_size : int, optional
+        The size of the window to use for the rolling average, by default 10
+    order : int, optional
+        The order of the polynomial to use, by default 2
+
+    Returns
+    -------
+    np.ndarray
+        The smoothed trajectory
+    """
+    smoothed_trajectory = np.copy(trajectory)
+    smoothed_trajectory[:, 1:3] = savgol_filter(
+        trajectory[:, 1:3], window_size, order, axis=0
+    )
+
+    t = smoothed_trajectory[:, 0]
+    dt = np.diff(t)
+    dp = np.diff(smoothed_trajectory[:, 1:3], axis=0) / 1000
+    v = dp / dt[:, None]
+    v = np.concatenate([v, [v[-1]]])
+    smoothed_trajectory[:, 5:7] = v
+
+    return smoothed_trajectory
+
+
+def smooth_trajectory_gaussian(
+    trajectory: np.ndarray, window_size: int = 10, sigma: float = 1
+) -> np.ndarray:
+    """Smooth a trajectory using a Gaussian filter
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    window_size : int, optional
+        The size of the window to use for the rolling average, by default 10
+    sigma : float, optional
+        The standard deviation of the Gaussian filter, by default 1
+
+    Returns
+    -------
+    np.ndarray
+        The smoothed trajectory
+    """
+    smoothed_trajectory = np.copy(trajectory)
+    smoothed_trajectory[:, 1] = gaussian_filter1d(
+        trajectory[:, 1], sigma=sigma, mode="nearest"
+    )
+    smoothed_trajectory[:, 2] = gaussian_filter1d(
+        trajectory[:, 2], sigma=sigma, mode="nearest"
+    )
+
+    return smoothed_trajectory
+
+
+def compute_lateral_distance_obstacle(
+    trajectory: np.ndarray, obstacle_position: np.ndarray, n_points: int
+) -> np.ndarray:
+    dp = trajectory[1:, 1:3] - trajectory[:-1, 1:3]
+    mean_dp = np.mean(dp[:n_points], axis=0)
+    start_direction = mean_dp / np.linalg.norm(mean_dp)
+
+    # compute the distance between the line
+    # guided by the start direction and the obstacle position
+    distance = np.abs(cross(start_direction, obstacle_position - trajectory[0, 1:3]))
+
+    # point at which the obstacle is the closest
+    # d_to_point = (
+    #     np.linalg.norm(obstacle_position - trajectory[0, 1:3]) ** 2 - distance**2
+    # ) ** 0.5
+    # closest_point = trajectory[0, 1:3] + d_to_point * start_direction
+
+    # plt.scatter(trajectory[:, 1], trajectory[:, 2])
+    # plt.scatter(obstacle_position[0], obstacle_position[1])
+    # plt.plot(
+    #     [trajectory[0, 1], closest_point[0]],
+    #     [trajectory[0, 2], closest_point[1]],
+    # )
+    # plt.axis("equal")
+    # plt.show()
+
+    return distance
+
+
+def compute_stride_frequency(
+    trajectory: np.ndarray,
+    window_duration: float = 2,
+    min_f: float = 0,
+    max_f: float = 4,
+    power_threshold: float = 0.002,
+) -> tuple[float | None, float | None]:
+    """Compute the stride frequency of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    window_duration : float, optional
+        The duration of the window to use for smoothing, by default 2
+    min_f : float, optional
+        The minimum frequency to consider, by default 0
+    max_f : float, optional
+        The maximum frequency to consider, by default 4
+    power_threshold : float, optional
+        The minimum power to consider a frequency as valid, by default 0.5
+
+    Returns
+    -------
+    float
+        The stride frequency or None if no frequency is found
+    """
+    # find a baseline trajectory (i.e. the trajectory without swaying)
+    # sampling_time = np.mean(np.diff(trajectory[:, 0]))
+    sampling_time = 0.03
+    window_duration = 2  # seconds ~ 2 strides
+    window = int(window_duration / sampling_time)
+    if window > len(trajectory):
+        return None, None
+    smoothed_trajectory = smooth_trajectory_savitzy_golay(trajectory, window)
+
+    # compute the signed distance from the baseline trajectory
+    step_vectors = np.diff(smoothed_trajectory[:, 1:3], axis=0)
+    step_vectors /= np.linalg.norm(step_vectors, axis=1)[:, None]
+    to_fitted = (trajectory[:, 1:3] - smoothed_trajectory[:, 1:3])[:-1]
+    distance_to_fitted = np.cross(step_vectors, to_fitted) / 1000
+
+    # compute the periodogram
+    # sampling_freq = (1 / sampling_time).astype(float)
+    sampling_freq = 1 / sampling_time
+    f, P = periodogram(
+        distance_to_fitted, sampling_freq, scaling="spectrum", nfft=10000
+    )
+    # print(len(f), min(f), max(f), sampling_freq)
+
+    # only keep the frequencies between min_f and max_f
+    # and the power above the threshold
+    mask = (f > min_f) & (f < max_f) & (P > power_threshold)
+    candidate_frequencies = f[mask]
+    candidate_powers = P[mask]
+
+    if len(candidate_frequencies) == 0:
+        return None, None
+
+    # find the frequency with the highest power
+    stride_frequency = candidate_frequencies[np.argmax(candidate_powers)]
+
+    # plt.plot(f, P)
+    # plt.vlines(stride_frequency, 0, np.max(candidate_powers), color="red")
+    # plt.text(stride_frequency, np.max(candidate_powers), f"{stride_frequency:.2f}")
+    # plt.xlim([0, 4])
+    # plt.show()
+
+    # compute the swaying
+    stride_t = 1 / stride_frequency
+    min_delta = 0.75 * stride_t / 2
+    min_delta_points = int(min_delta / sampling_time)
+    peaks_idx = find_peaks(
+        np.abs(distance_to_fitted), height=0.015, distance=min_delta_points
+    )[0]
+    # plt.plot(np.abs(distance_to_fitted))
+    # plt.scatter(peaks_idx, np.abs(distance_to_fitted)[peaks_idx])
+    # plt.show()
+
+    average_swaying = np.mean(np.abs(distance_to_fitted)[peaks_idx])
+
+    return stride_frequency, average_swaying
+
+
+def smooth_fitting(trajectory: np.ndarray) -> np.ndarray | None:
+    """Smooth a trajectory and compute the velocities
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    np.ndarray | None
+        The smoothed trajectory
+    """
+    dt = np.diff(trajectory[:, 0])
+    sampling_time = np.mean(dt)
+    window_duration = 2  # seconds
+    window = int(window_duration / 0.03)
+    if window > len(trajectory):
+        return None
+    smoothed_trajectory = smooth_trajectory_savitzy_golay(trajectory, window)
+
+    # compute velocities
+    t = smoothed_trajectory[:, 0]
+    dt = np.diff(t)
+    dp = np.diff(smoothed_trajectory[:, 1:3], axis=0) / 1000
+    v = dp / dt[:, None]
+    v = np.concatenate([v, [v[-1]]])
+    smoothed_trajectory[:, 5:7] = v
+
+    return smoothed_trajectory
+
+
+def compute_gait_residual(trajectory: np.ndarray) -> np.ndarray | None:
+    fitted_traj = smooth_fitting(trajectory)
+    if fitted_traj is None:
+        return None
+
+    # find the signed distance to the fitted trajectory
+    fitted_position = fitted_traj[:, 1:3]
+
+    step_vectors = np.diff(fitted_position, axis=0)
+    step_vectors /= np.linalg.norm(step_vectors, axis=1)[:, None]
+    to_fitted = (trajectory[:, 1:3] - fitted_position)[:-1]
+    distance_to_fitted = np.cross(step_vectors, to_fitted) / 1000
+
+    return distance_to_fitted
+
+
+def compute_gsi(
+    residual_A: np.ndarray, residual_B: np.ndarray, n_bins: int = 32
+) -> float:
+    """Compute the gait symmetry index between two trajectories
+
+    Parameters
+    ----------
+    residual_A : np.ndarray
+        The residual of trajectory A
+    residual_B : np.ndarray
+        The residual of trajectory B
+    n_bins : int, optional
+        The number of bins to use for the histogram, by default 32
+
+    Returns
+    -------
+    float
+        The gait symmetry index
+    """
+    hilbert_A = hilbert(residual_A)
+    hilbert_B = hilbert(residual_B)
+
+    phase_A = np.unwrap(np.angle(hilbert_A))  # type: ignore
+    phase_B = np.unwrap(np.angle(hilbert_B))  # type: ignore
+    phase_diff = phase_A - phase_B
+
+    phase_A /= 2 * np.pi
+    phase_B /= 2 * np.pi
+    phase_diff /= 2 * np.pi
+    phase_diff = phase_diff % 1
+
+    hist, _ = np.histogram(phase_diff, bins=n_bins, range=(0, 1))
+
+    ent = entropy(hist)
+    gsi = (np.log(n_bins) - ent) / np.log(n_bins)
+
+    return gsi
+
+
+def compute_average_synchronization(
+    traj_A: np.ndarray, traj_B: np.ndarray, n_bins: int = 32, window_duration: int = 5
+) -> tuple:
+    """
+    Compute the average gait symmetry index, the average mean relative phase, the average variance of the relative phase
+
+    Parameters
+    ----------
+    traj_A : np.ndarray
+        The trajectory of pedestrian A
+    traj_B : np.ndarray
+        The trajectory of pedestrian B
+    n_bins : int, optional
+        The number of bins to use for the histogram, by default 32
+    window_duration : int, optional
+        The duration of the window used for computing the average gait symmetry index, by default 5
+
+    Returns
+    -------
+    tuple | None
+        The average gait symmetry index, the average mean relative phase, the average variance of the relative phase
+
+    """
+    n_points_window = int(window_duration / 0.03)
+
+    assert len(traj_A) == len(traj_B)
+
+    gait_residual_A = compute_gait_residual(traj_A)
+    gait_residual_B = compute_gait_residual(traj_B)
+
+    if gait_residual_A is None or gait_residual_B is None:
+        return None, None, None
+
+    if len(gait_residual_A) < n_points_window or len(gait_residual_B) < n_points_window:
+        return None, None, None
+
+    n_windows = len(gait_residual_A) // n_points_window
+    gsis, means_relative_phase, variances_relative_phase = [], [], []
+    for i in range(n_windows):
+        start = i * n_points_window
+        end = (i + 1) * n_points_window
+        gsi = compute_gsi(
+            gait_residual_A[start:end], gait_residual_B[start:end], n_bins
+        )
+        if gsi is None:
+            continue
+
+        # if gsi > 0.3:
+        #     plot_static_2D_trajectories([traj_A[start:end], traj_B[start:end]])
+
+        gsis += [gsi]
+        mean_relative_phase, variance_relative_phase = compute_mean_relative_phase(
+            gait_residual_A[start:end], gait_residual_B[start:end]
+        )
+        means_relative_phase += [mean_relative_phase]
+        variances_relative_phase += [variance_relative_phase]
+    return (
+        np.mean(gsis),
+        circmean(means_relative_phase, high=np.pi, low=-np.pi),
+        np.mean(variances_relative_phase),
+    )
+
+
+def compute_mean_relative_phase(
+    gait_residual_A: np.ndarray, gait_residual_B: np.ndarray
+):
+    """Compute the mean relative phase between two gait residuals
+
+    Parameters
+    ----------
+    gait_residual_A : np.ndarray
+        The gait residual of trajectory A
+    gait_residual_B : np.ndarray
+        The gait residual of trajectory B
+
+    Returns
+    -------
+    mean_dphi : float
+        The mean relative phase
+    variance_dphi : float
+        The variance of the relative phase
+
+    """
+    hilbert_A = hilbert(gait_residual_A)
+    hilbert_B = hilbert(gait_residual_B)
+
+    phase_A = np.angle(hilbert_A)  # type: ignore
+    phase_B = np.angle(hilbert_B)  # type: ignore
+    # get phase between 0 and 2pi
+    phase_A[phase_A < 0] += 2 * np.pi
+    phase_B[phase_B < 0] += 2 * np.pi
+
+    dphi = phase_A - phase_B
+    dphi[dphi > np.pi] -= 2 * np.pi
+    dphi[dphi < -np.pi] += 2 * np.pi
+
+    mean_dphi = circmean(dphi, high=np.pi, low=-np.pi)
+    variance_dphi = circvar(dphi, high=np.pi, low=-np.pi)
+
+    return mean_dphi, variance_dphi
+
+
+def compute_velocity(trajectory: np.ndarray) -> np.ndarray:
+    """Compute the velocity of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    np.ndarray
+        The velocity of the trajectory
+    """
+    dt = np.diff(trajectory[:, 0])
+    dp = np.diff(trajectory[:, 1:3], axis=0)
+    v = dp / dt[:, None]
+    v = np.concatenate([v, [v[-1]]])
+    return v
+
+
+def compute_average_velocity(trajectory: np.ndarray) -> float:
+    """Compute the average velocity of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The average velocity of the trajectory
+    """
+    v = compute_velocity(trajectory)
+    return np.mean(np.linalg.norm(v, axis=1))
+
+
+def compute_integral_deviation(
+    trajectory: np.ndarray, n_average=66, normalize=True
+) -> float:
+    velocities = compute_velocity(trajectory)
+
+    start_point = trajectory[0, 1:3]
+    middle_points = trajectory[1:, 1:3]
+
+    start_vel = np.nanmean(velocities[:n_average], axis=0)
+    start_vel /= np.linalg.norm(start_vel)
+
+    distances_to_straight_line = cross(start_vel, middle_points - start_point)
+    distances_to_origin = np.linalg.norm(middle_points - start_point, axis=1)
+    distance_to_projection = np.sqrt(
+        distances_to_origin**2 - distances_to_straight_line**2
+    )
+    # projections = start_point + distance_to_projection[
+    #     :, None
+    # ] * start_vel / np.linalg.norm(start_vel)
+
+    # cum_distances_to_projection = np.cumsum(distance_to_projection)
+    integral = np.abs(
+        trapz(distances_to_straight_line / 1000, distance_to_projection / 1000)
+    )
+
+    # plt.plot(distance_to_projection, distances_to_straight_line)
+    # plt.show()
+
+    if normalize:
+        net = compute_net_displacement(trajectory[:, 1:3]) / 1000
+        integral /= net
+
+    # plt.scatter(trajectory[:, 1], trajectory[:, 2], s=1)
+    # plt.plot(
+    #     [start_point[0], start_point[0] + 4000 * start_vel[0]],
+    #     [start_point[1], start_point[1] + 4000 * start_vel[1]],
+    # )
+    # plt.scatter(projections[:, 0], projections[:, 1], s=1)
+    # for i in range(len(projections)):
+    #     plt.plot(
+    #         [middle_points[i, 0], projections[i, 0]],
+    #         [middle_points[i, 1], projections[i, 1]],
+    #         color="red",
+    #     )
+    # plt.axis("equal")
+    # plt.show()
+
+    return integral
+
+
+def compute_integral_cumulative_turning_angle(
+    trajectory: np.ndarray,
+    step_length: None | float = None,
+    rediscretize=True,
+    normalize=True,
+) -> float:
+    position = trajectory[:, 1:3]
+    if rediscretize and step_length is not None:
+        position = rediscretize_position_v2(position, step_length=step_length)
+        if len(position) <= 1:
+            return np.nan
+    turning_angles = compute_turning_angles(position)
+
+    cum_sum = np.cumsum(turning_angles)
+
+    return np.mean(np.abs(cum_sum))
+
+    # t = trajectory[1:-1, 0]
+
+    # integral = np.abs(np.trapz(cum_sum, t))
+
+    # if normalize:
+    #     net = compute_net_displacement(trajectory[:, 1:3]) / 1000
+    #     integral /= net
+
+    # return integral
+
+
+def compute_dynamic_time_warping_distance(trajectory_A, trajectory_B) -> float:
+    """Compute the dynamic time warping distance between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The dynamic time warping distance between the two trajectories
+    """
+    # compute the dynamic time warping
+    n_points_A = len(trajectory_A)
+    n_points_B = len(trajectory_B)
+
+    dtw = np.full((n_points_A, n_points_B), np.inf)
+    dtw[0, 0] = 0
+
+    for i in range(1, n_points_A):
+        for j in range(1, n_points_B):
+            cost = np.linalg.norm(trajectory_A[i, 1:3] - trajectory_B[j, 1:3])
+            dtw[i, j] = cost + np.min([dtw[i - 1, j], dtw[i, j - 1], dtw[i - 1, j - 1]])
+
+    return dtw[-1, -1] / max([n_points_A, n_points_B]) / 1000
+
+
+def compute_dynamic_time_warping_deviation(
+    trajectory: np.ndarray, n_average=66
+) -> float:
+    """
+    Compute the time warping deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The time warping deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    # plt.scatter(trajectory[:, 1], trajectory[:, 2], s=1)
+    # plt.scatter(straight_line_trajectory[:, 1], straight_line_trajectory[:, 2], s=1)
+    # plt.show()
+
+    dtw = compute_dynamic_time_warping_distance(trajectory, straight_line_trajectory)
+    return dtw
+
+
+def compute_lcss(trajectory_A, trajectory_B, eps=50):
+    """Compute the longest common subsequence between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+    eps : float, optional
+        The epsilon parameter to use, by default 0.1
+
+    Returns
+    -------
+    float
+        The longest common subsequence between the two trajectories
+    """
+    n_points_A = len(trajectory_A)
+    n_points_B = len(trajectory_B)
+
+    lcss = np.zeros((n_points_A, n_points_B))
+
+    for i in range(1, n_points_A):
+        for j in range(1, n_points_B):
+            d = np.linalg.norm(trajectory_A[i, 1:3] - trajectory_B[j, 1:3]).astype(
+                float
+            )
+            if d < eps:
+                lcss[i, j] = lcss[i - 1, j - 1] + 1
+            else:
+                lcss[i, j] = np.max([lcss[i - 1, j], lcss[i, j - 1]])
+    return lcss[-1, -1]
+
+
+def compute_lcss_distance(trajectory_A, trajectory_B, eps=50, normalize=False):
+    """Compute the lcss distance between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+    eps : float, optional
+        The epsilon parameter to use, by default 0.1
+    normalize : bool, optional
+        Whether or not to normalize the distance, by default False
+
+    Returns
+    -------
+    float
+        The lcss distance between the two trajectories
+    """
+    lcss = compute_lcss(trajectory_A, trajectory_B, eps=eps)
+    d = 1 - lcss / min([len(trajectory_A), len(trajectory_B)])
+    # if not normalize:
+    #     d = len(trajectory_A) + len(trajectory_B) - 2 * lcss
+    # else:
+    #     d = 1 - lcss / (len(trajectory_A) + len(trajectory_B) - lcss)
+    return d
+
+
+def compute_lcss_deviation(trajectory: np.ndarray, n_average=66, eps=50) -> float:
+    """
+    Compute the lcss deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The lcss deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    lcss = compute_lcss_distance(trajectory, straight_line_trajectory, eps=eps)
+    return lcss
+
+
+def compute_edr_distance(trajectory_A, trajectory_B, eps=50):
+    """Compute the edit distance on real sequence between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+    eps : float, optional
+        The epsilon parameter to use, by default 0.1
+
+    Returns
+    -------
+    float
+        The edit distance on real sequence between the two trajectories
+    """
+    # compute the edit distance on real
+    n_points_A = len(trajectory_A)
+    n_points_B = len(trajectory_B)
+
+    edr = np.full((n_points_A, n_points_B), np.inf)
+    edr[0, 0] = 0
+
+    for i in range(1, n_points_A):
+        for j in range(1, n_points_B):
+            d = np.linalg.norm(trajectory_A[i, 1:3] - trajectory_B[j, 1:3]).astype(
+                float
+            )
+            if d < eps:
+                c = 0
+            else:
+                c = 1
+            edr[i, j] = np.min(
+                [
+                    edr[i - 1, j] + 1,
+                    edr[i, j - 1] + 1,
+                    edr[i - 1, j - 1] + c,
+                ]
+            )
+    return edr[-1, -1]
+
+
+def compute_edr_deviation(trajectory: np.ndarray, n_average=66, eps=50) -> float:
+    """
+    Compute the edr deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The edr deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    edr = compute_edr_distance(trajectory, straight_line_trajectory, eps=eps)
+    return edr
+
+
+def compute_euclidean_distance(trajectory_A, trajectory_B):
+    """Compute the euclidean distance between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The euclidean distance between the two trajectories
+    """
+    assert len(trajectory_A) == len(trajectory_B)
+    return (
+        np.sum(np.linalg.norm(trajectory_A[:, 1:3] - trajectory_B[:, 1:3], axis=1))
+        / 1000
+        / len(trajectory_A)
+    )
+
+
+def compute_euclidean_deviation(trajectory: np.ndarray, n_average=66) -> float:
+    """
+    Compute the euclidean deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The euclidean deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    ed = compute_euclidean_distance(trajectory, straight_line_trajectory)
+    return ed
+
+
+def compute_erp_distance(trajectory_A, trajectory_B, g=(0, 0)):
+    """Compute the edit distance with real penalty between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+    g : tuple, optional
+        The gap points, by default (0,0)
+    Returns
+    -------
+    float
+        The edit distance with real penalty between the two trajectories
+    """
+    # compute the edit distance with real penalty
+    n_points_A = len(trajectory_A)
+    n_points_B = len(trajectory_B)
+
+    dist_g_A = np.linalg.norm(trajectory_A[:, 1:3] - g, axis=1)
+    dist_g_B = np.linalg.norm(trajectory_B[:, 1:3] - g, axis=1)
+
+    erp = np.full((n_points_A, n_points_B), np.inf)
+    erp[0, 0] = 0
+
+    for i in range(1, n_points_A):
+        for j in range(1, n_points_B):
+            d = np.linalg.norm(trajectory_A[i, 1:3] - trajectory_B[j, 1:3]).astype(
+                float
+            )
+            erp[i, j] = np.min(
+                [
+                    erp[i - 1, j] + dist_g_A[i],
+                    erp[i, j - 1] + dist_g_B[j],
+                    erp[i - 1, j - 1] + d,
+                ]
+            )
+    return erp[-1, -1] / 1000
+
+
+def compute_erp_deviation(trajectory: np.ndarray, n_average=66) -> float:
+    """
+    Compute the erp deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The erp deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    g = (0, 0)
+
+    erp = compute_erp_distance(trajectory, straight_line_trajectory, g=g)
+    return erp
+
+
+def compute_discrete_frechet_distance(trajectory_A, trajectory_B):
+    """
+    Compute the discrete Frechet distance between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The discrete Frechet distance between the two trajectories
+    """
+
+    n_points_A = len(trajectory_A)
+    n_points_B = len(trajectory_B)
+
+    df = distance.cdist(trajectory_A[:, 1:3], trajectory_B[:, 1:3])
+
+    for i in range(1, n_points_A):
+        df[i, 0] = np.max([df[i - 1, 0], df[i, 0]])
+    for j in range(1, n_points_B):
+        df[0, j] = np.max([df[0, j - 1], df[0, j]])
+
+    for i in range(1, n_points_A):
+        for j in range(1, n_points_B):
+            df[i, j] = np.max(
+                [np.min([df[i - 1, j], df[i, j - 1], df[i - 1, j - 1]]), df[i, j]]
+            )
+
+    return df[-1, -1] / 1000
+
+
+def compute_simultaneous_frechet_distance(trajectory_A, trajectory_B):
+    """
+    Compute the simultaneous Frechet distance between two trajectories
+
+    Parameters
+    ----------
+    trajectory_A : np.ndarray
+        A trajectory
+    trajectory_B : np.ndarray
+        A trajectory
+
+    Returns
+    -------
+    float
+        The simultaneous Frechet distance between the two trajectories
+    """
+
+    distances = np.linalg.norm(trajectory_A[:, 1:3] - trajectory_B[:, 1:3], axis=1)
+    return np.max(distances) / 1000
+
+
+def compute_simultaneous_frechet_deviation(
+    trajectory: np.ndarray, n_average=66
+) -> float:
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    df = compute_simultaneous_frechet_distance(trajectory, straight_line_trajectory)
+    return df
+
+
+def compute_discrete_frechet_deviation(trajectory: np.ndarray, n_average=66) -> float:
+    """
+    Compute the discrete Frechet deviation of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The discrete Frechet deviation of the trajectory
+    """
+
+    n_points = len(trajectory)
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+
+    straight_line_trajectory = np.zeros((n_points, 7))
+    straight_line_trajectory[:, 0] = trajectory[:, 0]
+    straight_line_trajectory[:, 1:3] = (
+        start_v * (trajectory[:, 0][:, None] - trajectory[0, 0]) + trajectory[0, 1:3]
+    )
+
+    df = compute_discrete_frechet_distance(trajectory, straight_line_trajectory)
+    return df
+
+
+def compute_steps(trajectory, n_average=66):
+    """
+    Find the positions of the step of a trajectory (i.e. the positions where
+    the angle of direction changes from negative to positive or vice versa)
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The number of steps of the trajectory
+    """
+
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+    start_direction = start_v / np.linalg.norm(start_v)
+
+    pos_diff = np.diff(trajectory[:, 1:3], axis=0)
+    pos_diff_dir = pos_diff / np.linalg.norm(pos_diff, axis=1)[:, None]
+
+    sign_det = np.sign(np.cross(start_direction, pos_diff_dir))
+    sign_changes = np.diff(sign_det)
+    sign_changes = np.concatenate([[-2], sign_changes, [-2]])
+
+    steps_positions = trajectory[:, 1:3][sign_changes != 0]
+
+    # start_direction_angle = np.arctan2(start_direction[1], start_direction[0])
+
+    # pos_diff = np.diff(trajectory[:, 1:3], axis=0)
+    # pos_diff_dir = pos_diff / np.linalg.norm(pos_diff, axis=1)[:, None]
+    # # compute signed angle between start direction and step direction
+    # pos_diff_angles = np.arctan2(pos_diff_dir[:, 1], pos_diff_dir[:, 0])
+    # step_angles_to_desired = pos_diff_angles - start_direction_angle
+    # # print(step_angles_to_desired)
+    # sign_changes = np.diff(np.sign(step_angles_to_desired))
+    # sign_changes = np.concatenate([[-2], sign_changes, [-2]])
+
+    # steps_positions = trajectory[:, 1:3][sign_changes != 0]
+
+    # # sign_changes = np.diff(np.sign(step_angles))
+    # fig, ax = plt.subplots(3, 1)
+    # ax[0].plot(trajectory[:, 1], trajectory[:, 2])
+    # ax[0].set_aspect("equal")
+    # ax[1].plot(np.rad2deg(pos_diff_angles))
+    # ax[1].plot(np.rad2deg(step_angles_to_desired))
+    # ax[1].plot(np.rad2deg(start_direction_angle))
+    # # ax[1].plot(sign_changes)
+    # # ax[2].plot(sign_changes)
+    # plt.show()
+
+    return steps_positions
+
+
+def compute_suddenness_turn(trajectory, n_average=66) -> float:
+    """
+    Compute the suddenness of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The suddenness of the trajectory
+    """
+
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+    start_direction = start_v / np.linalg.norm(start_v)
+    start_angle = np.arctan2(start_direction[1], start_direction[0])
+    # normalize between 0 and 2pi
+    if start_angle < 0:
+        start_angle += 2 * np.pi
+
+    steps = np.diff(trajectory[:, 1:3], axis=0)
+    step_directions = steps / np.linalg.norm(steps, axis=1)[:, None]
+    step_angles = np.arctan2(step_directions[:, 1], step_directions[:, 0])
+    step_angles[step_angles < 0] += 2 * np.pi
+
+    step_angles_to_desired = np.abs(step_angles - start_angle)
+    step_angles_to_desired[step_angles_to_desired > np.pi] = (
+        2 * np.pi - step_angles_to_desired[step_angles_to_desired > np.pi]
+    )
+    step_angles_to_desired = np.rad2deg(step_angles_to_desired)
+
+    vel_mag = np.linalg.norm(velocities, axis=1)
+    velocity_diff = np.diff(vel_mag) * 100  # cm/s
+
+    suddenness = np.abs(step_angles_to_desired * velocity_diff)
+
+    # fig, ax = plt.subplots(4, 1)
+    # ax[0].plot(trajectory[:, 1], trajectory[:, 2], '-o')
+    # ax[0].set_aspect("equal")
+    # ax[1].plot(step_angles)
+    # ax[2].plot(velocity_diff)
+    # ax[3].plot(suddenness)
+    # plt.show()
+
+    return suddenness
+
+
+def compute_turn_intensity(trajectory, n_average=66) -> float:
+    """
+    Compute the turn intensity of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    n_average : int, optional
+        The number of points to use for the average velocity, by default 66
+
+    Returns
+    -------
+    float
+        The turn intensity of the trajectory
+    """
+    velocities = compute_velocity(trajectory)
+    start_v = np.nanmean(velocities[:n_average], axis=0)
+    start_direction = start_v / np.linalg.norm(start_v)
+    start_angle = np.arctan2(start_direction[1], start_direction[0])
+    # normalize between 0 and 2pi
+    if start_angle < 0:
+        start_angle += 2 * np.pi
+
+    steps_positions = compute_steps(trajectory, n_average=n_average)
+    steps = np.diff(steps_positions, axis=0)
+    step_directions = steps / np.linalg.norm(steps, axis=1)[:, None]
+    step_angles = np.arctan2(step_directions[:, 1], step_directions[:, 0])
+    step_angles[step_angles < 0] += 2 * np.pi
+
+    step_angles_to_desired = np.abs(step_angles - start_angle)
+    step_angles_to_desired[step_angles_to_desired > np.pi] = (
+        2 * np.pi - step_angles_to_desired[step_angles_to_desired > np.pi]
+    )
+
+    step_deviation = np.linalg.norm(steps, axis=1) * np.sin(step_angles_to_desired) / 10
+    step_angles_to_desired = np.rad2deg(step_angles_to_desired)
+
+    turn_intensity = step_angles_to_desired * step_deviation
+    # print(turn_intensity)
+
+    # fig, ax = plt.subplots(4, 1, figsize=(10, 10))
+    # ax[0].plot(trajectory[:, 1], trajectory[:, 2])
+    # ax[0].plot(steps_positions[:, 0], steps_positions[:, 1], "-o")
+    # # vector for the start direction
+    # ax[0].quiver(
+    #     trajectory[0, 1],
+    #     trajectory[0, 2],
+    #     start_direction[0],
+    #     start_direction[1],
+    #     scale=10,
+    # )
+    # ax[0].axis("equal")
+
+    # ax[1].plot(step_angles_to_desired)
+    # ax[2].plot(step_deviation)
+    # ax[3].plot(turn_intensity)
+
+    # plt.show()
+
+    return turn_intensity
