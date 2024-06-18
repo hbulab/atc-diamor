@@ -4,14 +4,10 @@ This repository provides code to work with the [DIAMOR and ATC data sets](https:
 
 ## Installation
 
-### Requirements
-
-Clone the repository and install the provided `pedestrians-social-binding` package with
+Clone the repository with
 
 ```{bash}
 git clone git@github.com:Chevrefeuille/atc-diamor-pedestrians.git
-cd atc-diamor-pedestrian/code
-pip install -e ./package
 ```
 
 ### Data (DIAMOR raw data)
@@ -32,7 +28,7 @@ data
 ├── raw
 │   ├── diamor
 │   │   ├── 06
-│   │   │   ├── data_2_1.dat
+│   │   │   ├── data_1_1.dat
 │   │   │   ├── ...
 │   │   ├── 08
 │   │   │   ├── data_1_1.dat
@@ -65,3 +61,21 @@ You can verify that the package was correctly installed and the data was correct
 cd code
 python 00_example_plot_trajectories.py
 ```
+
+### Using as a package
+
+You can install the package in editable mode to be used in other projects with
+
+```{bash}
+cd atc-diamor-pedestrian/code
+pip install -e ./package
+```
+
+You can then import the package in your code with
+
+```{python}
+from pedestrians_social_binding.{module} import {function}
+```
+
+You can see an example of how to use the package this other repository: [dyad-single-encounters-article
+](https://github.com/hbulab/dyad-single-encounters-article)

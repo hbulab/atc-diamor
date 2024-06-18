@@ -38,27 +38,8 @@ if __name__ == "__main__":
     data_path = Path("../../data/unformatted/diamor/annotations")
     granular_annotations_tani_path = data_path / "taniguchi_gt_gest_06.csv"
     granular_annotations_tani = pd.read_csv(granular_annotations_tani_path).to_numpy()
-    granular_annotations_tomita_path = data_path / "tomita_gt_gest_06.csv"
-    granular_annotations_tomita = pd.read_csv(
-        granular_annotations_tomita_path
-    ).to_numpy()
 
     annotations_dict_tani = get_annotations_dict(granular_annotations_tani)
-    annotations_dict_tomita = get_annotations_dict(granular_annotations_tomita)
-
-    # check agreement
-    # for ped_id in annotations_dict_tani:
-    #     if ped_id not in annotations_dict_tomita:
-    #         print(f"Ped {ped_id} not in Tomita annotations")
-    #         continue
-    #     if (
-    #         annotations_dict_tani[ped_id]["is_interacting"]
-    #         != annotations_dict_tomita[ped_id]["is_interacting"]
-    #     ):
-    #         print(
-    #             f"Ped {ped_id} has different is_interacting values in Tomita and Tani"
-    #         )
-    # check
 
     # save annotations
     path_to_save = data_path / "taniguchi_gt_gest_06.pkl"
