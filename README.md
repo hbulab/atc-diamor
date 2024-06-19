@@ -36,11 +36,11 @@ data
 └── unformatted
     └── diamor
         └── annotations
-            ├── gt_2p_yoshioka_06.pkl
-            ├── gt_2p_yoshioka_08.pkl
-            ├── ids_wrt_group_size_taniguchi_06.pkl
-            ├── ids_wrt_group_size_taniguchi_08.pkl
-            ├── taniguchi_gt_gest_06.csv
+            ├── gt_2p_yos_06.pkl
+            ├── gt_2p_yoS_08.pkl
+            ├── ids_wrt_group_size_tan_06.pkl
+            ├── ids_wrt_group_size_tan_08.pkl
+            ├── tan_gt_gest_06.csv
          
 ```
 
