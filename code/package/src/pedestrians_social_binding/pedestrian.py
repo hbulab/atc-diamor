@@ -3,6 +3,7 @@ from asyncio import constants
 from pedestrians_social_binding.utils import *
 from pedestrians_social_binding.plot_utils import *
 from pedestrians_social_binding.constants import *
+from pedestrians_social_binding.trajectory_utils import *
 
 
 class Pedestrian:
