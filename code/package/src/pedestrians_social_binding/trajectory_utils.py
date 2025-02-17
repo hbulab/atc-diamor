@@ -4954,3 +4954,64 @@ def compute_lyapunov_exponent(
         ax.grid(color="gray", linestyle="--", linewidth=0.5)
 
     return m
+
+
+def check_determinism(p, n_boxes=10, min_val_box=10, ax=None):
+    """
+    Check the determinism of a trajectory using Kaplan's method
+
+    Parameters
+    ----------
+    p : np.array
+        The embedded trajectory, shape (n_points, n_dimensions)
+    n_boxes : int
+        The number of boxes
+    min_val_box : int
+        The minimum number of values in a box that are needed to compute the average box direction
+
+    Returns
+    -------
+    float
+        The average box direction across all boxes,
+        a value close to 1 indicates a deterministic trajectory
+    """
+    n_dimensions = p.shape[1]
+    limit = np.zeros((n_dimensions, 2))
+    for i in range(n_dimensions):
+        limit[i, 0] = np.min(p[:, i])
+        limit[i, 1] = np.max(p[:, i])
+
+    first_point = p[0, :]
+    current_box = get_box(p[0, :], limit, n_dimensions, n_boxes)
+
+    box_directions = {}
+
+    for j in range(1, len(p)):
+        new_box = get_box(p[j, :], limit, n_dimensions, n_boxes)
+        if not np.all(new_box == current_box):
+            # reached a new box
+            direction = (p[j, :] - first_point) / np.linalg.norm(p[j, :] - first_point)
+            if tuple(current_box) not in box_directions:
+                box_directions[tuple(current_box)] = []
+            box_directions[tuple(current_box)].append(direction)
+
+            first_point = p[j, :]  # update the first point
+        current_box = new_box
+
+    average_box_directions = []
+    for _, directions in box_directions.items():
+        if len(directions) >= min_val_box:
+            average_box_direction = np.mean(directions, axis=0)
+            norm_average_box_direction = np.linalg.norm(average_box_direction)
+            average_box_directions.append(norm_average_box_direction)
+
+    # if ax is not None:
+    #     # ax.hist(average_box_directions, bins=10, range=(0, 1))
+    #     # ax.hist(average_box_directions, bins=20)
+    #     ax.set_xlabel("Average box direction")
+    #     ax.set_ylabel("Frequency")
+    #     ax.grid(color="gray", linestyle="--", linewidth=0.5)
+
+    if len(average_box_directions) == 0:
+        return np.nan
+    return np.mean(average_box_directions)
