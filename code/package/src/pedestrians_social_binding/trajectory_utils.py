@@ -4864,3 +4864,93 @@ def compute_rqa(
     maxline = result.longest_diagonal_line
 
     return rec, det, maxline
+
+
+def compute_lyapunov_exponent(
+    p,
+    n_iterations=1000,
+    n_neighbors=10,
+    n_points=500,
+    eps=0.03,
+    theiler_window=400,
+    ax=None,
+):
+    """Compute the maximuam Lyapunov exponent of a trajectory
+
+    Parameters
+    ----------
+    p : np.ndarray
+        The trajectory
+    n_iterations : int, optional
+        The number of iterations, by default 1000
+    n_neighbors : int, optional
+        The number of neighbors, by default 10
+    n_points : int, optional
+        The number of points, by default 500
+    eps : float, optional
+        The epsilon parameter, by default 0.03
+    theiler_window : int, optional
+        The theiler window, by default 400
+    ax : matplotlib.pyplot.Axes, optional
+        The axis to plot the results, by default None
+
+    Returns
+    -------
+    float
+        The maximal Lyapunov exponent
+    """
+
+    max_try = n_points * 10
+
+    distances = []
+    j = 0
+
+    n_try = 0
+
+    while j < n_points and n_try < max_try:
+        # random starting point in the embedding
+        idx_reference_point = np.random.randint(0, p.shape[0])
+        point = p[idx_reference_point]
+        # find the nearest neighbors
+        all_distances = np.linalg.norm(p - point, axis=1)
+        all_distances[idx_reference_point] = np.inf  # exclude the reference point
+        # id of the close enough neighbors
+        neighbors = np.where(all_distances < eps)[0]
+        n_try += 1
+        # keep only the neighbors that are not too close to the reference point
+        neighbors = neighbors[np.abs(neighbors - idx_reference_point) > theiler_window]
+
+        if len(neighbors) < n_neighbors:
+            continue
+        # compute the average distance at all iterations
+        point_distances = np.zeros(n_iterations)
+        for k in range(n_iterations):
+            reference_trajectory_point = p[(idx_reference_point + k) % p.shape[0]]
+            for neighbor in neighbors:
+                neighbor_trajectory_point = p[(neighbor + k) % p.shape[0]]
+                point_distances[k] += np.abs(
+                    reference_trajectory_point[-1] - neighbor_trajectory_point[-1]
+                )
+        point_distances /= len(neighbors)
+        j += 1
+        distances.append(point_distances)
+
+    distances = np.array(distances)
+
+    if len(distances) == 0:
+        return None
+
+    expansion_rate = np.nanmean(np.log(distances), axis=0)
+
+    # fit a line with method of least squares
+    A = np.vstack([np.arange(n_iterations), np.ones(n_iterations)]).T
+    m, c = np.linalg.lstsq(A, expansion_rate, rcond=None)[0]
+
+    if ax is not None:
+        ax.plot(expansion_rate)
+        ax.plot(np.arange(n_iterations), m * np.arange(n_iterations) + c)
+        ax.set_xlabel("Number of iterations")
+        ax.set_ylabel("$\\log(E)$")
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+
+    return m
