@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.ticker import MaxNLocator, ScalarFormatter
 
 import random
 
@@ -5048,3 +5048,197 @@ def compute_phase_embedding(x, n_dimensions, delay):
         embedding[:, i] = x[i * delay : i * delay + n_embedding]
 
     return embedding
+
+
+def compute_optimal_delay(x, n_bins=30, max_tau=500, ax=None):
+    """
+    Compute the optimal delay for embedding using entropy.
+    arameters
+    ----------
+    x : np.array
+        The time series
+    n_bins : int
+        The number of bins for computing the entropy
+    max_tau : int
+        The maximum value of tau
+    ax : plt.Axes | None, optional
+        The axes on which to plot, by default None
+
+    Returns
+    -------
+    int
+        The optimal embedding delay
+    """
+    min_x = np.min(x)
+    max_x = np.max(x)
+
+    bins = np.linspace(min_x, max_x, n_bins)
+    bin_indices = np.digitize(x, bins) - 1
+
+    bin_indices[bin_indices == n_bins - 1] = n_bins - 2
+    probabilities = bin_indices / len(x)
+
+    informations = np.zeros(max_tau)
+    for tau in range(max_tau):
+        # compute the conditional probabilities
+        p_tau_hk = np.zeros((n_bins, n_bins))
+        for i in range(0, len(x) - tau):
+            p_tau_hk[bin_indices[i], bin_indices[i + tau]] += 1
+        p_tau_hk /= len(x) - tau
+
+        for h in range(n_bins):
+            p_h = probabilities[h]
+            for k in range(n_bins):
+                p_k = probabilities[k]
+                if p_tau_hk[h, k] > 0 and p_h > 0 and p_k > 0:
+                    informations[tau] += p_tau_hk[h, k] * np.log(
+                        p_tau_hk[h, k] / (p_h * p_k)
+                    )
+
+    # find the first minimum
+    diff_informations = np.diff(informations)
+
+    if np.all(diff_informations > 0):
+        return None
+    idx_min = np.where(diff_informations > 0)[0][0]
+
+    if ax is not None:
+        ax.plot(informations)
+        # vertical line
+        ax.axvline(idx_min, color="red", linestyle="--")
+        ax.set_xlabel("$\\tau$")
+        ax.set_ylabel("$I$")
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+
+    return idx_min
+
+
+def find_nearest_neighbors(embedding, epsilon, eps_rate=1.41, perc_waste=10):
+    """
+    Find the nearest neighbors of each point in the embedding
+
+    Parameters
+    ----------
+    embedding : np.array
+        The embedding, shape (n_points, n_dimensions)
+    epsilon : float
+        The epsilon
+    eps_rate : float
+        The rate of increase of epsilon
+    perc_waste : float
+        The percentage of waste
+
+    Returns
+    -------
+    np.array
+        The index of the nearest neighbors
+    np.array
+        The distance to the nearest neighbors
+    int
+        The number of nearest neighbors
+    """
+
+    n_points = len(embedding)
+
+    # Compute the distance matrix
+    distances = np.full((n_points, n_points), np.inf)
+    for i in range(n_points):
+        for j in range(i + 1, n_points):
+            dist = np.linalg.norm(embedding[i] - embedding[j])
+            distances[i, j] = dist
+            distances[j, i] = dist
+
+    while True:
+        # Find the nearest neighbors
+        index_nearest = np.full(n_points, -1)
+        distance_nearest = np.full(n_points, np.inf)
+        for i in range(n_points):
+            for j in range(n_points):
+                if (
+                    distances[i, j] < epsilon
+                    and i != j
+                    and distances[i, j] < distance_nearest[i]
+                ):
+                    distance_nearest[i] = distances[i, j]
+                    index_nearest[i] = j
+
+        # number of nearest neighbors
+        n_nearest = np.sum(index_nearest != -1)
+        percentage_without_nearest = 100 * (1 - n_nearest / n_points)
+
+        if percentage_without_nearest < perc_waste:
+            break
+        else:
+            epsilon *= eps_rate
+
+    return index_nearest, distance_nearest, n_nearest
+
+
+def compute_optimal_embedding_dimension(
+    x, max_dim=20, delay=70, epsilon=0.07, threshold=0.01, ax=None
+):
+    """
+    Compute the optimal embedding dimension using the false nearest neighbors method
+
+    Parameters
+    ----------
+    x : np.array
+        The time series
+    max_dim : int
+        The maximum embedding dimension
+    delay : int
+        The delay
+    epsilon : float
+        The epsilon
+    threshold : float
+        The threshold for the false nearest neighbors
+
+    Returns
+    -------
+    int
+        The optimal embedding dimension
+    """
+
+    embedding = compute_phase_embedding(x, 1, delay)
+    prev_nearest_neighbors, prev_distances_nearest, n_nearest = find_nearest_neighbors(
+        embedding,
+        epsilon,
+    )
+
+    max_dim_allowed = int((len(x) - 1) / delay + 1)
+
+    fnn = []
+    for m in range(2, min(max_dim, max_dim_allowed) + 1):
+        embedding = compute_phase_embedding(x, m, delay)
+
+        n_false_nearest = 0
+        for i in range(len(embedding)):
+            if prev_nearest_neighbors[i] != -1 and prev_nearest_neighbors[i] < len(
+                embedding
+            ):
+                Ri = np.abs(
+                    (embedding[i, -1] - embedding[prev_nearest_neighbors[i], -1])
+                    / prev_distances_nearest[i]
+                )
+                if Ri > 10:
+                    n_false_nearest += 1
+        fnn.append(n_false_nearest / n_nearest)
+
+        prev_nearest_neighbors, prev_distances_nearest, n_nearest = (
+            find_nearest_neighbors(embedding, epsilon)
+        )
+
+    # find the value of m where the FNN is below the threshold
+    idx_min = np.where(np.array(fnn) < threshold)[0][0]
+
+    if ax is not None:
+        ax.plot(fnn)
+        # horizontal line
+        ax.axhline(threshold, color="red", linestyle="--")
+        ax.set_xlabel("$m$")
+        ax.set_ylabel("$f_{false}$")
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+        # only int values
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    return idx_min
