@@ -4975,6 +4975,18 @@ def check_determinism(p, n_boxes=10, min_val_box=10, ax=None):
         The average box direction across all boxes,
         a value close to 1 indicates a deterministic trajectory
     """
+
+    def get_box(point, limits, n_dimensions, n_boxes=10):
+        # get the box of a point
+        box = np.zeros(n_dimensions)
+        for i in range(n_dimensions):
+            box[i] = np.floor(
+                (point[i] - limits[i, 0]) / (limits[i, 1] - limits[i, 0]) * n_boxes
+            )
+            if box[i] == n_boxes:
+                box[i] -= 1
+        return box
+
     n_dimensions = p.shape[1]
     limit = np.zeros((n_dimensions, 2))
     for i in range(n_dimensions):
@@ -5005,13 +5017,34 @@ def check_determinism(p, n_boxes=10, min_val_box=10, ax=None):
             norm_average_box_direction = np.linalg.norm(average_box_direction)
             average_box_directions.append(norm_average_box_direction)
 
-    # if ax is not None:
-    #     # ax.hist(average_box_directions, bins=10, range=(0, 1))
-    #     # ax.hist(average_box_directions, bins=20)
-    #     ax.set_xlabel("Average box direction")
-    #     ax.set_ylabel("Frequency")
-    #     ax.grid(color="gray", linestyle="--", linewidth=0.5)
-
     if len(average_box_directions) == 0:
         return np.nan
     return np.mean(average_box_directions)
+
+
+def compute_phase_embedding(x, n_dimensions, delay):
+    """
+    Compute the phase embedding of a time series
+
+    Parameters
+    ----------
+    x : np.array
+        The time series
+    n_dimensions : int
+        The number of dimensions of the embedding
+    delay : int
+        The delay
+
+    Returns
+    -------
+    np.array
+        The phase embedding, shape (N - (n_dimensions - 1) * delay, n_dimensions)
+    """
+    n_points = len(x)
+
+    n_embedding = n_points - (n_dimensions - 1) * delay
+    embedding = np.zeros((n_embedding, n_dimensions))
+    for i in range(n_dimensions):
+        embedding[:, i] = x[i * delay : i * delay + n_embedding]
+
+    return embedding
