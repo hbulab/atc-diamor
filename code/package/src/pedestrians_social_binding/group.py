@@ -31,7 +31,12 @@ class Group:
 
         # We create a fake pedestrian corresponding to the group
         self.as_individual = Pedestrian(
-            group_id, env, day, self.get_center_of_mass_trajectory(), []
+            group_id,
+            env,
+            day,
+            self.get_center_of_mass_trajectory(),
+            [],
+            is_non_group=None,
         )
 
     def __str__(self):

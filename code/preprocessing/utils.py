@@ -32,3 +32,24 @@ def pickle_save(file_path, data):
     """
     with open(file_path, "wb") as f:
         pk.dump(data, f)
+
+
+def dat_load(file_path):
+    """Load the content of a dat file
+
+    Parameters
+    ----------
+    file_path : str
+        The path to the file which will be read
+
+    Returns
+    -------
+    obj
+        The content of the dat file
+    """
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+    data = []
+    for line in lines:
+        data.append(list(map(int, line.strip().split())))
+    return data

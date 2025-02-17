@@ -118,14 +118,25 @@ class Environment:
                         trajectory, sampling_time=sampling_time
                     )
                 if ped_id in individual_annotations:
-                    groups = individual_annotations[ped_id]["groups"]
+                    groups = (
+                        individual_annotations[ped_id]["groups"]
+                        if "groups" in individual_annotations[ped_id]
+                        else []
+                    )
+                    if "non_group" in individual_annotations[ped_id]:
+                        is_non_group = individual_annotations[ped_id]["non_group"]
+                    else:
+                        is_non_group = False
                 else:
                     groups = []
+                    is_non_group = None
 
-                if no_groups and len(groups) > 0:
+                if no_groups and (is_non_group != True):
                     continue
 
-                pedestrian = Pedestrian(ped_id, self, day, trajectory, groups)
+                pedestrian = Pedestrian(
+                    ped_id, self, day, trajectory, groups, is_non_group
+                )
                 pedestrians += [pedestrian]
 
         # apply the potential thresholds
@@ -280,7 +291,12 @@ class Environment:
                             trajectory, sampling_time=sampling_time
                         )
                     group_member = Pedestrian(
-                        group_member_id, self, day, trajectory, [group_id]
+                        group_member_id,
+                        self,
+                        day,
+                        trajectory,
+                        [group_id],
+                        is_non_group=False,
                     )
                     members += [group_member]
                 # apply the potential ped thresholds

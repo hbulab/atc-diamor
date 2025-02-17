@@ -36,29 +36,33 @@ def pickle_save(file_path: str, data):
         pk.dump(data, f)
 
 
-def write_table(data : list, label : list):
+def write_table(data: list, label: list):
     cohen_data = np.zeros((len(data), len(data)))
     t_statistic = np.zeros((len(data), len(data)))
     for i, line in enumerate(data):
-        for j in range(i+1, len(data)):
-            t_statistic[i,j] = stats.ttest_ind(line, data[j])[1]
-            t_statistic[j,i] = None
-            cohen_data[i,j] = np.abs(compute_cohen_d(line, data[j]))
-            cohen_data[j,i] = None
+        for j in range(i + 1, len(data)):
+            t_statistic[i, j] = stats.ttest_ind(line, data[j])[1]
+            t_statistic[j, i] = None
+            cohen_data[i, j] = np.abs(compute_cohen_d(line, data[j]))
+            cohen_data[j, i] = None
 
-    final_data_stat = {"Labels / Data ": label,
-                  }
-    final_data_cohen = {"Labels / Data ": label,
-                  }
-    
-    for i,label_name in enumerate(label) :
-        final_data_stat[label_name] = t_statistic[i,:]
-        final_data_cohen[label_name] = cohen_data[i,:]
+    final_data_stat = {
+        "Labels / Data ": label,
+    }
+    final_data_cohen = {
+        "Labels / Data ": label,
+    }
 
-    return [pd.DataFrame(final_data_stat),pd.DataFrame(final_data_cohen)]
+    for i, label_name in enumerate(label):
+        final_data_stat[label_name] = t_statistic[i, :]
+        final_data_cohen[label_name] = cohen_data[i, :]
 
-        
-def compute_cohen_d(group1 : list, group2 : list) :
+    return [pd.DataFrame(final_data_stat), pd.DataFrame(final_data_cohen)]
+
+
+def compute_cohen_d(group1: list, group2: list):
     n1 = len(group1)
     n2 = len(group2)
-    return (np.mean(group1) - np.mean(group2)) / np.sqrt(((n1-1)*np.var(group1) + (n2-1)*np.var(group2)) / (n1 + n2 - 2))
+    return (np.mean(group1) - np.mean(group2)) / np.sqrt(
+        ((n1 - 1) * np.var(group1) + (n2 - 1) * np.var(group2)) / (n1 + n2 - 2)
+    )

@@ -29,7 +29,7 @@ class Pedestrian:
 
     """
 
-    def __init__(self, ped_id, env, day, trajectory, groups):
+    def __init__(self, ped_id, env, day, trajectory, groups, is_non_group):
         self.ped_id = ped_id
         # trajectory is a numpy array with one line for each data point
         # and 7 columns :
@@ -40,6 +40,7 @@ class Pedestrian:
         self.day = day
         self.first_obs = trajectory[0, 0] if len(trajectory) else -1
         self.last_obs = trajectory[-1, 0] if len(trajectory) else -1
+        self.is_non_group = is_non_group
 
     def __str__(self):
         """String representation of the pedestrian"""

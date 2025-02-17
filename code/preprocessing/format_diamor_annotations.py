@@ -36,6 +36,7 @@ if __name__ == "__main__":
                     if ped_id not in individuals_data:
                         individuals_data[ped_id] = {
                             "groups": [],
+                            "non_group": False,
                         }
                     individuals_data[ped_id]["groups"] += [group_id]
 
@@ -66,6 +67,7 @@ if __name__ == "__main__":
                 if ped_id not in individuals_data:
                     individuals_data[ped_id] = {
                         "groups": [],
+                        "non_group": False,
                     }
                 individuals_data[ped_id]["groups"] += [group_id]
         # print(overlap)
@@ -93,6 +95,19 @@ if __name__ == "__main__":
                         ],
                     }
             groups_data[group_id]["interactions"] = interactions
+
+        # load non groups annotations
+        non_groups_annotations = os.path.join(dir_path, f"tani_tutti_10{day}_ng.dat")
+        non_groups_data = dat_load(non_groups_annotations)
+        for line in non_groups_data:
+            non_group_id = line[0]
+            if non_group_id not in individuals_data:
+                individuals_data[non_group_id] = {
+                    "non_group": True,
+                    "groups": [],
+                }
+            else:
+                print(f"{non_group_id} annotated as group and individual...")
 
         groups_annotations_path = (
             f"../../data/formatted/diamor/groups_annotations_{day}.pkl"
