@@ -9,9 +9,16 @@ from scipy.signal import hilbert
 from scipy.stats import entropy, circmean, circvar, circstd
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.ticker import ScalarFormatter
+
 import random
+
+import pywt
+from pycwt import wct, cwt, xwt
+
 
 if TYPE_CHECKING:  # Only imports the below statements during type checking
     from pedestrians_social_binding.group import Group
@@ -22,7 +29,7 @@ from pedestrians_social_binding.constants import *
 from pedestrians_social_binding.parameters import *
 
 
-from pedestrians_social_binding.plot_utils import plot_static_2D_trajectories
+# from pedestrians_social_binding.plot_utils import plot_static_2D_trajectories
 
 cross = lambda x, y, axis=None: np.cross(x, y, axis=axis)  # annotation bug
 
@@ -2165,6 +2172,112 @@ def get_pieces(
     return pieces
 
 
+def get_pieces_indices(
+    trajectory: np.ndarray,
+    piece_size: int | None,
+    overlap: bool = False,
+    delta: int = 100,
+    max_pieces: int | None = None,
+) -> list[np.ndarray]:
+    """Breaks up a trajectory in to pieces of given length
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    piece_size : int
+        The length of the pieces
+    overlap : bool, optional
+        Whether or not overlapping pieces should be returned, by default False
+    delta : int, optional
+        The maximum difference allowed between the length of the pieces
+        requested and the pieces returned, by default 100
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
+    position = trajectory[:, 1:3]
+    start = position[0]
+    end = position[1]
+
+    points_distances = np.triu(distance.cdist(position, position, "euclidean"), k=0)
+
+    indices_smaller = np.argwhere(np.abs(points_distances - piece_size) < delta)
+
+    indices = []
+    current_min = 0
+    for start, end in indices_smaller:
+        # check if there is some overlaping, and skip piece
+        if not overlap and start < current_min:
+            continue
+        current_min = end
+
+        # get the trajectory between these points
+        indices += [[start, end]]
+
+    if max_pieces is not None and len(indices) > max_pieces:
+        # sample random pieces
+        indices = random.sample(indices, max_pieces)
+
+    return indices
+
+
+def get_pieces_indices_from_time(
+    trajectory: np.ndarray,
+    piece_duration: int,
+    overlap: bool = False,
+    delta: int = 0.2,
+    max_pieces: int | None = None,
+) -> list[np.ndarray]:
+    """Breaks up a trajectory in to pieces of given length
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    piece_duration : int
+        The duration of the pieces
+    overlap : bool, optional
+        Whether or not overlapping pieces should be returned, by default False
+    delta : int, optional
+        The maximum difference allowed between the duration of the pieces
+        requested and the pieces returned, by default 2
+
+    Returns
+    -------
+    list[np.ndarray]
+        The list of pieces
+    """
+    times = trajectory[:, 0]
+    start = times[0]
+    end = times[1]
+
+    t_times = np.reshape(times, (len(times), 1))
+    time_distances = t_times.T - t_times
+
+    indices_smaller = np.argwhere(np.abs(time_distances - piece_duration) < delta)
+
+    indices = []
+    current_min = 0
+
+    for start, end in indices_smaller:
+        # check if there is some overlaping, and skip piece
+        if not overlap and start < current_min:
+            continue
+        current_min = end
+
+        # get the trajectory between these points
+        indices += [[start, end]]
+
+    if max_pieces is not None and len(indices) > max_pieces:
+        # sample random pieces
+        indices = random.sample(indices, max_pieces)
+
+    return indices
+
+
 def get_random_pieces(position: np.ndarray, n_pieces=20) -> list[np.ndarray]:
     """Extract random pieces from a trajectory
 
@@ -2929,13 +3042,21 @@ def smooth_trajectory_savitzy_golay(
     smoothed_trajectory[:, 1:3] = savgol_filter(
         trajectory[:, 1:3], window_size, order, axis=0
     )
+    smoothed_trajectory[:, 5:7] = savgol_filter(
+        trajectory[:, 1:3],
+        window_size,
+        order,
+        axis=0,
+        deriv=1,
+        delta=np.mean(np.diff(smoothed_trajectory[:, 0])),
+    )
 
-    t = smoothed_trajectory[:, 0]
-    dt = np.diff(t)
-    dp = np.diff(smoothed_trajectory[:, 1:3], axis=0) / 1000
-    v = dp / dt[:, None]
-    v = np.concatenate([v, [v[-1]]])
-    smoothed_trajectory[:, 5:7] = v
+    # t = smoothed_trajectory[:, 0]
+    # dt = np.diff(t)
+    # dp = np.diff(smoothed_trajectory[:, 1:3], axis=0)
+    # v = dp / dt[:, None]
+    # v = np.concatenate([v, [v[-1]]])
+    # smoothed_trajectory[:, 5:7] = v
 
     return smoothed_trajectory
 
@@ -2999,55 +3120,44 @@ def compute_lateral_distance_obstacle(
     return distance
 
 
-def compute_stride_frequency(
-    trajectory: np.ndarray,
-    window_duration: float = 2,
+def compute_stride_frequency_from_residual(
+    gait_residual: np.ndarray,
+    sampling_time: float = 0.03,
     min_f: float = 0,
     max_f: float = 4,
-    power_threshold: float = 0.002,
+    n_fft: int = 10000,
+    power_threshold: float = 1e-4,
+    save_plot: bool = False,
+    file_path: str = None,
 ) -> tuple[float | None, float | None]:
-    """Compute the stride frequency of a trajectory
+    """
+    Compute the stride frequency of a trajectory
 
     Parameters
     ----------
-    trajectory : np.ndarray
-        A trajectory
-    window_duration : float, optional
-        The duration of the window to use for smoothing, by default 2
+    gait_residual : np.ndarray
+        The gait residual
+    sampling_time : float, optional
+        The sampling time, by default 0.03
     min_f : float, optional
         The minimum frequency to consider, by default 0
     max_f : float, optional
         The maximum frequency to consider, by default 4
+    n_fft : int, optional
+        The number of points to use for the FFT, by default 10000
     power_threshold : float, optional
-        The minimum power to consider a frequency as valid, by default 0.5
+        The minimum power to consider a frequency as valid, by default 1e-4
 
     Returns
     -------
     float
-        The stride frequency or None if no frequency is found
+        The stride frequency or None if no frequency
+    float
+        The average swaying or None if no frequency
     """
-    # find a baseline trajectory (i.e. the trajectory without swaying)
-    # sampling_time = np.mean(np.diff(trajectory[:, 0]))
-    sampling_time = 0.03
-    window_duration = 2  # seconds ~ 2 strides
-    window = int(window_duration / sampling_time)
-    if window > len(trajectory):
-        return None, None
-    smoothed_trajectory = smooth_trajectory_savitzy_golay(trajectory, window)
-
-    # compute the signed distance from the baseline trajectory
-    step_vectors = np.diff(smoothed_trajectory[:, 1:3], axis=0)
-    step_vectors /= np.linalg.norm(step_vectors, axis=1)[:, None]
-    to_fitted = (trajectory[:, 1:3] - smoothed_trajectory[:, 1:3])[:-1]
-    distance_to_fitted = np.cross(step_vectors, to_fitted) / 1000
-
     # compute the periodogram
-    # sampling_freq = (1 / sampling_time).astype(float)
     sampling_freq = 1 / sampling_time
-    f, P = periodogram(
-        distance_to_fitted, sampling_freq, scaling="spectrum", nfft=10000
-    )
-    # print(len(f), min(f), max(f), sampling_freq)
+    f, P = periodogram(gait_residual, sampling_freq, scaling="spectrum", nfft=n_fft)
 
     # only keep the frequencies between min_f and max_f
     # and the power above the threshold
@@ -3061,29 +3171,192 @@ def compute_stride_frequency(
     # find the frequency with the highest power
     stride_frequency = candidate_frequencies[np.argmax(candidate_powers)]
 
-    # plt.plot(f, P)
-    # plt.vlines(stride_frequency, 0, np.max(candidate_powers), color="red")
-    # plt.text(stride_frequency, np.max(candidate_powers), f"{stride_frequency:.2f}")
-    # plt.xlim([0, 4])
-    # plt.show()
-
     # compute the swaying
     stride_t = 1 / stride_frequency
     min_delta = 0.75 * stride_t / 2
     min_delta_points = int(min_delta / sampling_time)
     peaks_idx = find_peaks(
-        np.abs(distance_to_fitted), height=0.015, distance=min_delta_points
+        np.abs(gait_residual), height=0.015, distance=min_delta_points
     )[0]
-    # plt.plot(np.abs(distance_to_fitted))
-    # plt.scatter(peaks_idx, np.abs(distance_to_fitted)[peaks_idx])
+    # plt.plot(np.abs(gait_residual))
+    # plt.scatter(peaks_idx, np.abs(gait_residual)[peaks_idx])
     # plt.show()
 
-    average_swaying = np.mean(np.abs(distance_to_fitted)[peaks_idx])
+    average_swaying = np.mean(np.abs(gait_residual)[peaks_idx])
+
+    if save_plot:
+        fig, ax = plt.subplots(figsize=(7, 4))
+
+        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+
+        ax.plot(f, P)
+        ax.vlines(stride_frequency, 0, np.max(candidate_powers), color="red")
+        ax.text(
+            stride_frequency + 0.1, np.max(candidate_powers), f"{stride_frequency:.2f}"
+        )
+
+        # vertical lines for the min and max frequency
+        top_bar = np.max(candidate_powers) * 1.1
+        ax.vlines(min_f, 0, top_bar, color="green")
+        ax.vlines(max_f, 0, top_bar, color="green")
+        # color between the min and max frequency
+        ax.fill_between([min_f, max_f], 0, top_bar, color="green", alpha=0.2)
+
+        # horizontal line for the power threshold
+        ax.hlines(power_threshold, 0, 4, color="green")
+
+        ax.set_xlim([0, 4])
+        ax.set_ylim([0, top_bar])
+        ax.grid(color="gray", linestyle="--", linewidth=0.5)
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Power (m²)")
+
+        plt.savefig(file_path)
+        plt.close()
+        # plt.show()
 
     return stride_frequency, average_swaying
 
 
-def smooth_fitting(trajectory: np.ndarray) -> np.ndarray | None:
+def compute_stride_frequency(
+    trajectory: np.ndarray,
+    sampling_time: float = 0.03,
+    window_duration: float = 2,
+    min_f: float = 0,
+    max_f: float = 4,
+    n_fft: int = 10000,
+    power_threshold: float = 0.002,
+    save_plot: bool = False,
+    file_path: str = None,
+) -> tuple[float | None, float | None]:
+    """Compute the stride frequency of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    sampling_time : float, optional
+        The sampling time, by default 0.03
+    window_duration : float, optional
+        The duration of the window to use for smoothing, by default 2
+    min_f : float, optional
+        The minimum frequency to consider, by default 0
+    max_f : float, optional
+        The maximum frequency to consider, by default 4
+    n_fft : int, optional
+        The number of points to use for the FFT, by default 10000
+    power_threshold : float, optional
+        The minimum power to consider a frequency as valid, by default 0.5
+
+    Returns
+    -------
+    float
+        The stride frequency or None if no frequency is found
+    """
+    gait_residual = compute_gait_residual(trajectory, window_duration=window_duration)
+
+    if gait_residual is None:
+        return None, None
+
+    stride_frequency, average_swaying = compute_stride_frequency_from_residual(
+        gait_residual,
+        sampling_time=sampling_time,
+        min_f=min_f,
+        max_f=max_f,
+        n_fft=n_fft,
+        power_threshold=power_threshold,
+        save_plot=save_plot,
+        file_path=file_path,
+    )
+
+    return stride_frequency, average_swaying
+
+
+def compute_stride_parameters(
+    trajectory,
+    sampling_time: float = 0.03,
+    window_duration: float = 2,
+    min_f: float = 0,
+    max_f: float = 4,
+    n_fft: int = 10000,
+    power_threshold: float = 1e-4,
+) -> tuple[float | None, float | None, float | None]:
+    """Compute the stride frequency of a trajectory
+
+    Parameters
+    ----------
+    trajectory : np.ndarray
+        A trajectory
+    sampling_time : float, optional
+        The sampling time, by default 0.03
+    window_duration : float, optional
+        The duration of the window to use for smoothing, by default 2
+    min_f : float, optional
+        The minimum frequency to consider, by default 0
+    max_f : float, optional
+        The maximum frequency to consider, by default 4
+    n_fft : int, optional
+        The number of points to use for the FFT, by default 10000
+    power_threshold : float, optional
+        The minimum power to consider a frequency as valid, by default 1e-4
+
+    Returns
+    -------
+    float
+        The stride frequency or None if no frequency is found
+    float
+        The average swaying or None if no frequency is found
+    float
+        The average stride length or None if no frequency is found
+    """
+
+    gait_residual = compute_gait_residual(trajectory, window_duration=window_duration)
+
+    if gait_residual is None:
+        return None, None, None
+
+    sampling_freq = 1 / sampling_time
+    f, P = periodogram(gait_residual, sampling_freq, scaling="spectrum", nfft=n_fft)
+
+    # only keep the frequencies between min_f and max_f
+    # and the power above the threshold
+    mask = (f > min_f) & (f < max_f) & (P > power_threshold)
+    candidate_frequencies = f[mask]
+    candidate_powers = P[mask]
+
+    if len(candidate_frequencies) == 0:
+        return None, None, None
+
+    # find the frequency with the highest power
+    stride_frequency = candidate_frequencies[np.argmax(candidate_powers)]
+
+    # compute the swaying
+    step_t = 1 / (stride_frequency * 2)
+    min_delta = 0.5 * step_t
+    min_delta_points = int(min_delta / sampling_time)
+    peaks_idx = find_peaks(
+        np.abs(gait_residual), height=0.015, distance=min_delta_points
+    )[0]
+
+    average_swaying = np.mean(np.abs(gait_residual)[peaks_idx])
+
+    fitted_traj = smooth_fitting(trajectory, window_duration=window_duration)
+
+    stride_positions = fitted_traj[peaks_idx, 1:3]
+
+    # plt.plot(trajectory[:, 1], trajectory[:, 2])
+    # plt.scatter(stride_positions[:, 0], stride_positions[:, 1])
+    # plt.show()
+
+    stride_lengths = np.linalg.norm(np.diff(stride_positions, axis=0), axis=1) * 2
+    average_stride_length = np.mean(stride_lengths)
+
+    return stride_frequency, average_swaying, average_stride_length
+
+
+def smooth_fitting(
+    trajectory: np.ndarray, window_duration: float = 2
+) -> np.ndarray | None:
     """Smooth a trajectory and compute the velocities
 
     Parameters
@@ -3098,7 +3371,6 @@ def smooth_fitting(trajectory: np.ndarray) -> np.ndarray | None:
     """
     dt = np.diff(trajectory[:, 0])
     sampling_time = np.mean(dt)
-    window_duration = 2  # seconds
     window = int(window_duration / 0.03)
     if window > len(trajectory):
         return None
@@ -3115,8 +3387,10 @@ def smooth_fitting(trajectory: np.ndarray) -> np.ndarray | None:
     return smoothed_trajectory
 
 
-def compute_gait_residual(trajectory: np.ndarray) -> np.ndarray | None:
-    fitted_traj = smooth_fitting(trajectory)
+def compute_gait_residual(
+    trajectory: np.ndarray, window_duration: float = 2
+) -> np.ndarray | None:
+    fitted_traj = smooth_fitting(trajectory, window_duration=window_duration)
     if fitted_traj is None:
         return None
 
@@ -3148,21 +3422,26 @@ def compute_gsi(
     Returns
     -------
     float
-        The gait symmetry index
+        The gait synchronisation index
     """
     hilbert_A = hilbert(residual_A)
     hilbert_B = hilbert(residual_B)
 
-    phase_A = np.unwrap(np.angle(hilbert_A))  # type: ignore
-    phase_B = np.unwrap(np.angle(hilbert_B))  # type: ignore
+    phase_A = np.angle(hilbert_A)  # type: ignore
+    phase_B = np.angle(hilbert_B)  # type: ignore
+
+    phase_A = np.unwrap(phase_A)
+    phase_B = np.unwrap(phase_B)
+
     phase_diff = phase_A - phase_B
 
-    phase_A /= 2 * np.pi
-    phase_B /= 2 * np.pi
-    phase_diff /= 2 * np.pi
-    phase_diff = phase_diff % 1
+    # wrap the phase difference between -pi and pi
+    phase_diff = (phase_diff + np.pi) % (2 * np.pi) - np.pi
 
-    hist, _ = np.histogram(phase_diff, bins=n_bins, range=(0, 1))
+    # phase_diff /= 2 * np.pi
+    # phase_diff = phase_diff % 1
+
+    hist, _ = np.histogram(phase_diff, bins=n_bins, range=(-np.pi, np.pi))
 
     ent = entropy(hist)
     gsi = (np.log(n_bins) - ent) / np.log(n_bins)
@@ -3170,8 +3449,263 @@ def compute_gsi(
     return gsi
 
 
+def compute_coherence(
+    residual_A: np.ndarray,
+    residual_B: np.ndarray,
+    sampling_time: float = 0.03,
+    min_freq: float = 0.2,
+    max_freq: float = 2.0,
+) -> float:
+    wct_v, _, coi, freq, _ = wct(residual_A, residual_B, sampling_time, sig=False)
+
+    l = 4 * np.pi / (6 + np.sqrt(2 + 6**2))
+    coi_freq = 1 / (l * coi)
+
+    in_coi = freq[:, None] >= coi_freq
+    wct_v[~in_coi] = np.nan
+
+    # fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    # t = np.arange(len(residual_A)) * sampling_time
+
+    # ax.pcolormesh(t, freq, np.abs(wct_v), cmap="jet", rasterized=True, linewidth=0)
+    # ax.set_xlabel("Time (s)")
+    # ax.set_ylabel("Frequency (Hz)")
+    # ax.set_yscale("log", base=2)
+    # ax.set_yticks([int(2**i) if int(2**i) == 2**i else 2**i for i in range(-4, 4)])
+    # ax.set_ylim([1 / 16, 10])
+    # ax.plot(t, coi_freq, color="black", linestyle="--", linewidth=2)
+    # ax.fill_between(t, 1 / 16, coi_freq, alpha=0.5, hatch="//", facecolor="white")
+
+    # plt.show()
+
+    idx_min_f = np.argmin(np.abs(freq - min_freq))
+    idx_max_f = np.argmin(np.abs(freq - max_freq))
+
+    wct_v = wct_v[idx_max_f:idx_min_f, :]
+
+    mean_coherence = np.nanmean(wct_v)
+
+    return mean_coherence
+
+
+def compute_cross_wavelet_transform(
+    gait_residuals_A,
+    gait_residuals_B,
+    min_scale: int = 1,
+    max_scale: int = 256,
+    n_scales=100,
+):
+    """
+    Compute the cross wavelet transform between two gait residuals
+
+    Parameters
+    ----------
+    gait_residuals_A : np.ndarray
+        The gait residual of pedestrian A
+    gait_residuals_B : np.ndarray
+        The gait residual of pedestrian B
+    min_scale : int, optional
+        The minimum scale to consider, by default 1
+    max_scale : int, optional
+        The maximum scale to consider, by default 256
+    n_scales : int, optional
+        The number of scales to consider, by default 100
+
+    Returns
+    -------
+    np.ndarray
+        The cross wavelet transform
+    """
+    scales = np.geomspace(min_scale, max_scale, num=n_scales)
+    cwtmatr_A, freqs = pywt.cwt(gait_residuals_A, scales, "cmor0.5-2")
+    cwtmatr_B, freqs = pywt.cwt(gait_residuals_B, scales, "cmor0.5-2")
+
+    # fig, ax = plt.subplots(2, 2, figsize=(10, 5))
+    # ax[0, 0].plot(gait_residuals_A)
+    # ax[0, 0].set_title("Gait residual A")
+    # ax[0, 1].plot(gait_residuals_B)
+    # ax[0, 1].set_title("Gait residual B")
+
+    # ax[1, 0].imshow(np.abs(cwtmatr_A), aspect="auto", cmap="jet")
+    # ax[1, 0].set_title("CWT A")
+    # ax[1, 1].imshow(np.abs(cwtmatr_B), aspect="auto", cmap="jet")
+    # ax[1, 1].set_title("CWT B")
+
+    # plt.show()
+
+    return cwtmatr_A * np.conj(cwtmatr_B), freqs, scales
+
+
+def compute_gsi_with_cross_wavelet(
+    residual_A: np.ndarray,
+    residual_B: np.ndarray,
+    min_freq: int = 0.2,
+    max_freq: int = 2.0,
+    n_bins: int = 32,
+    min_scale: int = 1,
+    max_scale: int = 256,
+    n_scales=100,
+    sampling_time: float = 0.03,
+) -> float:
+    """Compute the gait symmetry index between two trajectories using the cross wavelet transform
+
+    Parameters
+    ----------
+    residual_A : np.ndarray
+        The residual of trajectory A
+    residual_B : np.ndarray
+        The residual of trajectory B
+
+    Returns
+    -------
+    float
+        The gait synchronisation index
+    """
+
+    # plt.plot(residual_A)
+    # plt.plot(residual_B)
+    # plt.show()
+
+    cwt, freq, scales = compute_cross_wavelet_transform(
+        residual_A,
+        residual_B,
+        min_scale=min_scale,
+        max_scale=max_scale,
+        n_scales=n_scales,
+    )
+    # try:
+    #     # print(len(residual_A), len(residual_B))
+    #     cwt, _, freq, _ = xwt(residual_A, residual_B, sampling_time)
+    # except Warning as e:
+    #     return None
+
+    phase = np.angle(cwt)
+
+    freq_id_min = np.argmin(np.abs(freq - min_freq))
+    freq_id_max = np.argmin(np.abs(freq - max_freq))
+
+    # phase_min_id = np.argmin(np.abs(scales - min_phase))
+    # phase_max_id = np.argmin(np.abs(scales - max_phase))
+    # print(phase_min_id, phase_max_id)
+
+    # fig, axes = plt.subplots(2, 1)
+    # axes[0].imshow(phase, aspect="auto")
+
+    # axes[1].imshow(phase[phase_min_id:phase_max_id, :], aspect="auto")
+
+    # plt.show()
+
+    # phase_band = np.mean(phase[phase_min_id:phase_max_id, :], axis=0)
+    phase_band = np.zeros_like(residual_A)
+    for i in range(len(residual_A)):
+        phase_band[i] = circmean(
+            phase[freq_id_max:freq_id_min, i], low=-np.pi, high=np.pi
+        )
+
+    # plt.plot(phase_band)
+    # plt.show()
+
+    hist, _ = np.histogram(phase_band, bins=n_bins, range=(-np.pi, np.pi))
+
+    ent = entropy(hist)
+    gsi = (np.log(n_bins) - ent) / np.log(n_bins)
+
+    return gsi
+
+
+def compute_gsi_with_phase_locking(
+    residual_A: np.ndarray, residual_B: np.ndarray, n_bins: int = 32
+) -> float:
+    """Compute the gait symmetry index between two trajectories using the phase locking method
+
+    Parameters
+    ----------
+    residual_A : np.ndarray
+        The residual of trajectory A
+    residual_B : np.ndarray
+        The residual of trajectory B
+
+    Returns
+    -------
+    float
+        The gait synchronisation index
+    """
+    hilbert_A = hilbert(residual_A)
+    hilbert_B = hilbert(residual_B)
+
+    phase_A = np.angle(hilbert_A)  # type: ignore
+    phase_B = np.angle(hilbert_B)  # type: ignore
+
+    phase_A = np.unwrap(phase_A)
+    phase_B = np.unwrap(phase_B)
+
+    f1 = compute_stride_frequency_from_residual(residual_A, power_threshold=0)[0]
+    f2 = compute_stride_frequency_from_residual(residual_B, power_threshold=0)[0]
+
+    # min_n = 0
+    # max_n = 2
+    # ns = np.linspace(min_n, max_n, 101)
+    # ms = np.linspace(min_n, max_n, 101)
+
+    # syncs = np.zeros((len(ns), len(ms)))
+
+    # for i, n in enumerate(ns):
+    #     for j, m in enumerate(ms):
+    #         phi_nm = n * phase_A - m * phase_B
+
+    #         phi_nm = (phi_nm + np.pi) % (2 * np.pi) - np.pi
+
+    #         hist, _ = np.histogram(phi_nm, bins=n_bins, range=(-np.pi, np.pi))
+    #         ent = entropy(hist)
+    #         sync = (np.log(n_bins) - ent) / np.log(n_bins)
+
+    #         syncs[i, j] = sync
+
+    phi_nm = f2 * phase_A - f1 * phase_B
+    phi_nm = (phi_nm + np.pi) % (2 * np.pi) - np.pi
+    hist_nm, _ = np.histogram(phi_nm, bins=n_bins, range=(-np.pi, np.pi))
+    ent_nm = entropy(hist_nm)
+    sync_nm = (np.log(n_bins) - ent_nm) / np.log(n_bins)
+
+    # phi_11 = phase_A - phase_B
+    # phi_11 = (phi_11 + np.pi) % (2 * np.pi) - np.pi
+    # hist_11, _ = np.histogram(phi_11, bins=n_bins, range=(-np.pi, np.pi))
+    # ent_11 = entropy(hist_11)
+    # sync_11 = (np.log(n_bins) - ent_11) / np.log(n_bins)
+
+    # if sync_nm < sync_11:
+    #     print(f"n = {f1}, m = {f2}, sync = {sync_nm}, sync_11 = {sync_11}")
+    #     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+    #     im = ax.imshow(
+    #         syncs, cmap="viridis", origin="lower", extent=[min_n, max_n, min_n, max_n]
+    #     )
+    #     cbar = fig.colorbar(im)
+
+    #     ax.scatter(f1, f2, color="red", marker="x", s=100)
+    #     ax.scatter(1, 1, color="green", marker="x", s=100)
+    #     ax.set_xlabel("n")
+    #     ax.set_ylabel("m")
+    #     ax.set_title("Phase locking")
+    #     plt.show()
+
+    return sync_nm
+
+
 def compute_average_synchronization(
-    traj_A: np.ndarray, traj_B: np.ndarray, n_bins: int = 32, window_duration: int = 5
+    traj_A: np.ndarray,
+    traj_B: np.ndarray,
+    n_bins: int = 32,
+    window_duration: int | None = None,
+    window_length: int | None = None,
+    method: str = "hilbert",
+    nm_locking: bool = False,
+    min_freq: int = 0.5,
+    max_freq: int = 2.0,
+    min_scale: int = 1,
+    max_scale: int = 256,
+    n_scales=100,
+    power_threshold: float = 1e-4,
 ) -> tuple:
     """
     Compute the average gait symmetry index, the average mean relative phase, the average variance of the relative phase
@@ -3185,47 +3719,232 @@ def compute_average_synchronization(
     n_bins : int, optional
         The number of bins to use for the histogram, by default 32
     window_duration : int, optional
-        The duration of the window used for computing the average gait symmetry index, by default 5
-
+        The duration of the window used for computing the average gait symmetry index, by default 5 s
+    window_length : int, optional
+        The length of the window used for computing the average gait symmetry index, by default 5 m
+    method : str, optional
+        The method to use for computing the average gait symmetry index, by default "hilbert"
+    nm_locking : bool, optional
+        Whether or not to use n m phase locking, by default False
+    min_freq : int, optional
+        The minimum frequency, by default 0.5
+    max_freq : int, optional
+        The maximum frequency, by default 2.0
+    min_scale : int, optional
+        The minimum scale to consider for the cross wavelet transform, by default 1
+    max_scale : int, optional
+        The maximum scale to consider for the cross wavelet transform, by default 256
+    n_scales : int, optional
+        The number of scales to consider for the cross wavelet transform, by default 100
+    power_threshold : float, optional
+        The minimum power to consider a frequency as valid, by default 1e-4
     Returns
     -------
     tuple | None
         The average gait symmetry index, the average mean relative phase, the average variance of the relative phase
 
     """
-    n_points_window = int(window_duration / 0.03)
 
     assert len(traj_A) == len(traj_B)
+
+    assert window_duration is not None or window_length is not None
+    assert window_duration is None or window_length is None
+
+    assert method in ["hilbert", "wavelet"]
 
     gait_residual_A = compute_gait_residual(traj_A)
     gait_residual_B = compute_gait_residual(traj_B)
 
     if gait_residual_A is None or gait_residual_B is None:
-        return None, None, None
+        return None, None, None, None
 
-    if len(gait_residual_A) < n_points_window or len(gait_residual_B) < n_points_window:
-        return None, None, None
+    if window_duration is not None:
+        split_indices = get_pieces_indices_from_time(traj_A, window_duration)
+    else:
+        split_indices = get_pieces_indices(traj_A, window_length)
 
-    n_windows = len(gait_residual_A) // n_points_window
+    if len(split_indices) == 0:
+        return None, None, None, None
+
+    # print(split_indices)
+    # sub_trajectories_A = [
+    #     traj_A[start:end] for start, end in split_indices if len(traj_A[start:end])
+    # ]
+    # sub_trajectories_B = [
+    #     traj_B[start:end] for start, end in split_indices if len(traj_B[start:end])
+    # ]
+    # colors = ["blue", "red"] * len(sub_trajectories_A)
+    # plot_static_2D_trajectories(sub_trajectories_A + sub_trajectories_B, colors=colors)
+
     gsis, means_relative_phase, variances_relative_phase = [], [], []
-    for i in range(n_windows):
-        start = i * n_points_window
-        end = (i + 1) * n_points_window
-        gsi = compute_gsi(
-            gait_residual_A[start:end], gait_residual_B[start:end], n_bins
-        )
+    delta_fs = []
+    for start, end in split_indices:
+        n_points = end - start
+        if n_points < 10:  # not enough points
+            continue
+
+        # compute gsi
+        if nm_locking:
+            gsi = compute_gsi_with_phase_locking(
+                gait_residual_A[start:end], gait_residual_B[start:end], n_bins
+            )
+        else:
+            if method == "hilbert":
+                gsi = compute_gsi(
+                    gait_residual_A[start:end], gait_residual_B[start:end], n_bins
+                )
+            elif method == "wavelet":
+                gsi = compute_gsi_with_cross_wavelet(
+                    gait_residual_A[start:end],
+                    gait_residual_B[start:end],
+                    min_freq=min_freq,
+                    max_freq=max_freq,
+                    min_scale=min_scale,
+                    max_scale=max_scale,
+                    n_scales=n_scales,
+                )
+
         if gsi is None:
             continue
 
-        # if gsi > 0.3:
-        #     plot_static_2D_trajectories([traj_A[start:end], traj_B[start:end]])
+        gsis += [gsi]
+
+        # compute mean relative phase
+        if method == "hilbert":
+            mean_relative_phase, variance_relative_phase = compute_mean_relative_phase(
+                gait_residual_A[start:end], gait_residual_B[start:end]
+            )
+        elif method == "wavelet":
+            mean_relative_phase, variance_relative_phase = (
+                compute_mean_relative_phase_with_cross_wavelet(
+                    gait_residual_A[start:end],
+                    gait_residual_B[start:end],
+                )
+            )
+        means_relative_phase += [mean_relative_phase]
+        variances_relative_phase += [variance_relative_phase]
+
+        # compute delta_f
+        f1 = compute_stride_frequency_from_residual(
+            gait_residual_A[start:end],
+            power_threshold=power_threshold,
+            min_f=min_freq,
+            max_f=max_freq,
+            # save_plot=True,
+            n_fft=1000,
+        )[0]
+        f2 = compute_stride_frequency_from_residual(
+            gait_residual_B[start:end],
+            power_threshold=power_threshold,
+            min_f=min_freq,
+            max_f=max_freq,
+            # save_plot=True,
+            n_fft=1000,
+        )[0]
+
+        if f1 is None or f2 is None:
+            delta_f = np.nan
+        else:
+            delta_f = np.abs(f1 - f2)
+            # print(delta_f)
+        delta_fs += [delta_f]
+
+    # if gsi > 0.3:
+    #     plot_static_2D_trajectories([traj_A[start:end], traj_B[start:end]])
+
+    return (
+        np.nanmean(gsis),
+        circmean(means_relative_phase, high=np.pi, low=-np.pi),
+        np.mean(variances_relative_phase),
+        np.mean(delta_fs),
+    )
+
+
+def compute_average_synchronization_from_vel(
+    traj_A: np.ndarray,
+    traj_B: np.ndarray,
+    n_bins: int = 32,
+    window_duration: int = None,
+    window_length: int = None,
+) -> tuple:
+    """
+    Compute the average gait symmetry index, the average mean relative phase, the average variance of the relative phase
+
+    Parameters
+    ----------
+    traj_A : np.ndarray
+        The trajectory of pedestrian A
+    traj_B : np.ndarray
+        The trajectory of pedestrian B
+    n_bins : int, optional
+        The number of bins to use for the histogram, by default 32
+    window_duration : int, optional
+        The duration of the window used for computing the average gait symmetry index, by default 5 s
+    window_length : int, optional
+        The length of the window used for computing the average gait symmetry index, by default 5 m
+    Returns
+    -------
+    tuple | None
+        The average gait symmetry index, the average mean relative phase, the average variance of the relative phase
+
+    """
+
+    assert len(traj_A) == len(traj_B)
+
+    assert window_duration is not None or window_length is not None
+    assert window_duration is None or window_length is None
+
+    vel_A = compute_velocity(traj_A)
+    vel_B = compute_velocity(traj_B)
+
+    vel_mag_A = np.linalg.norm(vel_A, axis=1)
+    vel_mag_B = np.linalg.norm(vel_B, axis=1)
+
+    vel_mag_A = vel_A - np.mean(vel_A, axis=0)
+    vel_mag_B = vel_B - np.mean(vel_B, axis=0)
+
+    # plt.plot(traj_A[:, 0], vel_mag_A, label="A")
+    # plt.plot(traj_B[:, 0], vel_mag_B, label="B")
+    # plt.legend()
+    # plt.show()
+
+    # if gait_residual_A is None or gait_residual_B is None:
+    #     return None, None, None
+
+    if window_duration is not None:
+        split_indices = get_pieces_indices_from_time(traj_A, window_duration)
+    else:
+        split_indices = get_pieces_indices(traj_A, window_length)
+
+    if len(split_indices) == 0:
+        return None, None, None
+
+    # print(split_indices)
+    # sub_trajectories_A = [
+    #     traj_A[start:end] for start, end in split_indices if len(traj_A[start:end])
+    # ]
+    # sub_trajectories_B = [
+    #     traj_B[start:end] for start, end in split_indices if len(traj_B[start:end])
+    # ]
+    # colors = ["blue", "red"] * len(sub_trajectories_A)
+    # plot_static_2D_trajectories(sub_trajectories_A + sub_trajectories_B, colors=colors)
+
+    gsis, means_relative_phase, variances_relative_phase = [], [], []
+    for start, end in split_indices:
+        gsi = compute_gsi(vel_mag_A[start:end], vel_mag_B[start:end], n_bins)
+        if gsi is None:
+            continue
 
         gsis += [gsi]
         mean_relative_phase, variance_relative_phase = compute_mean_relative_phase(
-            gait_residual_A[start:end], gait_residual_B[start:end]
+            vel_mag_A[start:end], vel_mag_B[start:end]
         )
         means_relative_phase += [mean_relative_phase]
         variances_relative_phase += [variance_relative_phase]
+
+    # if gsi > 0.3:
+    #     plot_static_2D_trajectories([traj_A[start:end], traj_B[start:end]])
+
     return (
         np.mean(gsis),
         circmean(means_relative_phase, high=np.pi, low=-np.pi),
@@ -3272,6 +3991,63 @@ def compute_mean_relative_phase(
     return mean_dphi, variance_dphi
 
 
+def compute_mean_relative_phase_with_cross_wavelet(
+    gait_residual_A: np.ndarray,
+    gait_residual_B: np.ndarray,
+    min_phase: int = 60,
+    max_phase: int = 85,
+    min_scale: int = 1,
+    max_scale: int = 256,
+    n_scales=100,
+):
+    """Compute the mean relative phase between two gait residuals using the cross wavelet transform
+
+    Parameters
+    ----------
+    gait_residual_A : np.ndarray
+        The gait residual of trajectory A
+    gait_residual_B : np.ndarray
+        The gait residual of trajectory B
+    min_phase : int, optional
+        The minimum phase to consider, by default 60
+    max_phase : int, optional
+        The maximum phase to consider, by default 85
+    min_scale : int, optional
+        The minimum scale to consider, by default 1
+    max_scale : int, optional
+        The maximum scale to consider, by default 256
+    n_scales : int, optional
+        The number of scales to consider, by default 100
+
+
+    Returns
+    -------
+    tuple
+        The mean relative phase, the variance of the relative phase
+
+    """
+
+    cwt, _, scales = compute_cross_wavelet_transform(
+        gait_residual_A,
+        gait_residual_B,
+        min_scale=min_scale,
+        max_scale=max_scale,
+        n_scales=n_scales,
+    )
+
+    phase = np.angle(cwt)
+
+    phase_min_id = np.argmin(np.abs(scales - min_phase))
+    phase_max_id = np.argmin(np.abs(scales - max_phase))
+
+    phase_band = np.mean(phase[phase_min_id:phase_max_id, :], axis=0)
+
+    mean_dphi = circmean(phase_band, high=np.pi, low=-np.pi)
+    variance_dphi = circvar(phase_band, high=np.pi, low=-np.pi)
+
+    return mean_dphi, variance_dphi
+
+
 def compute_velocity(trajectory: np.ndarray) -> np.ndarray:
     """Compute the velocity of a trajectory
 
@@ -3288,6 +4064,7 @@ def compute_velocity(trajectory: np.ndarray) -> np.ndarray:
     dt = np.diff(trajectory[:, 0])
     dp = np.diff(trajectory[:, 1:3], axis=0)
     v = dp / dt[:, None]
+    # print(v)
     v = np.concatenate([v, [v[-1]]])
     return v
 
