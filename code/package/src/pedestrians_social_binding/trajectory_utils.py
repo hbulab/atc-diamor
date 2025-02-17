@@ -20,6 +20,14 @@ import pywt
 from pycwt import wct, cwt, xwt
 
 
+from pyrqa.analysis_type import Cross
+from pyrqa.time_series import TimeSeries
+from pyrqa.settings import Settings
+from pyrqa.neighbourhood import FixedRadius
+from pyrqa.metric import EuclideanMetric
+from pyrqa.computation import RQAComputation
+
+
 if TYPE_CHECKING:  # Only imports the below statements during type checking
     from pedestrians_social_binding.group import Group
     from pedestrians_social_binding.pedestrian import Pedestrian
@@ -4802,3 +4810,57 @@ def compute_turn_intensity(trajectory, n_average=66) -> float:
     # plt.show()
 
     return turn_intensity
+
+
+def compute_rqa(
+    gait_residual_A,
+    gait_residual_B,
+    embedding_dimension=4,
+    time_delay=7,
+    epsilon=0.07,
+    theiler_corrector=0,
+):
+    """Compute the recurrence quantification analysis between two gait residuals
+
+    Parameters
+    ----------
+    gait_residual_A : np.ndarray
+        The gait residual of trajectory A
+    gait_residual_B : np.ndarray
+        The gait residual of trajectory B
+    embedding_dimension : int, optional
+        The embedding dimension, by default 4
+    time_delay : int, optional
+        The time delay, by default 7
+    epsilon : float, optional
+        The epsilon parameter, by default 0.07
+    theiler_corrector : int, optional
+        The theiler corrector, by default 0
+
+    Returns
+    -------
+    tuple
+        The recurrence rate, the determinism, the longest diagonal line
+    """
+
+    time_series_A = TimeSeries(
+        gait_residual_A, embedding_dimension=embedding_dimension, time_delay=time_delay
+    )
+    time_series_B = TimeSeries(
+        gait_residual_B, embedding_dimension=embedding_dimension, time_delay=time_delay
+    )
+    time_series = (time_series_A, time_series_B)
+    settings = Settings(
+        time_series,
+        analysis_type=Cross,  # type: ignore
+        neighbourhood=FixedRadius(epsilon),
+        similarity_measure=EuclideanMetric,
+        theiler_corrector=theiler_corrector,
+    )
+    computation = RQAComputation.create(settings)
+    result = computation.run()
+    rec = result.recurrence_rate
+    det = result.determinism
+    maxline = result.longest_diagonal_line
+
+    return rec, det, maxline
