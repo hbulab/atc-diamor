@@ -4956,6 +4956,35 @@ def compute_lyapunov_exponent(
     return m
 
 
+def get_box(point, limits, n_dimensions, n_boxes=10):
+    """Get the box of a point
+
+    Parameters
+    ----------
+    point : np.array
+        The point
+    limits : np.array
+        The limits of the space
+    n_dimensions : int
+        The number of dimensions
+    n_boxes : int
+        The number of boxes
+
+    Returns
+    -------
+    np.array
+        The box of the point
+    """
+    box = np.zeros(n_dimensions)
+    for i in range(n_dimensions):
+        box[i] = np.floor(
+            (point[i] - limits[i, 0]) / (limits[i, 1] - limits[i, 0]) * n_boxes
+        )
+        if box[i] == n_boxes:
+            box[i] -= 1
+    return box
+
+
 def check_determinism(p, n_boxes=10, min_val_box=10, ax=None):
     """
     Check the determinism of a trajectory using Kaplan's method
@@ -4975,17 +5004,6 @@ def check_determinism(p, n_boxes=10, min_val_box=10, ax=None):
         The average box direction across all boxes,
         a value close to 1 indicates a deterministic trajectory
     """
-
-    def get_box(point, limits, n_dimensions, n_boxes=10):
-        # get the box of a point
-        box = np.zeros(n_dimensions)
-        for i in range(n_dimensions):
-            box[i] = np.floor(
-                (point[i] - limits[i, 0]) / (limits[i, 1] - limits[i, 0]) * n_boxes
-            )
-            if box[i] == n_boxes:
-                box[i] -= 1
-        return box
 
     n_dimensions = p.shape[1]
     limit = np.zeros((n_dimensions, 2))
